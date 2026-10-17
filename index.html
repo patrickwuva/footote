@@ -116,11 +116,6 @@ h2.q{font-weight:600;font-size:clamp(24px, 6.2vw, 32px);line-height:1.18;margin:
   font-family:var(--body);font-weight:500;font-size:22px;padding:10px 12px;border-radius:0}
 .answer input:focus{outline:none;border-color:var(--amber)}
 .answer input::placeholder{color:var(--muted);opacity:.7}
-.sugg{display:flex;flex-direction:column;border:2px solid var(--line);background:rgba(0,0,0,.45);animation:enter .18s both}
-.sugg button{text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:9px 12px;font-size:16px;display:flex;justify-content:space-between;align-items:center;gap:10px}
-.sugg button:last-child{border-bottom:0}
-.sugg button[aria-selected="true"]{background:rgba(224,165,58,.16);color:var(--gold)}
-.sugg .hint{font-family:var(--pixel);font-size:10px;color:var(--muted);text-transform:uppercase;white-space:nowrap}
 .flash{min-height:20px;font-family:var(--pixel);font-size:11px;color:var(--muted);text-transform:uppercase}
 .flash.bad{color:var(--red)}
 .jolt{animation:jolt .3s}
@@ -196,7 +191,7 @@ h2.q{font-weight:600;font-size:clamp(24px, 6.2vw, 32px);line-height:1.18;margin:
     <h3 id="help-h">How to dig</h3>
     <ol>
       <li>Seven prompts a day, the same for everyone. Each asks for something from American history.</li>
-      <li>You have 25 seconds per prompt. Suggestions appear as you type; Enter digs the highlighted one. Anything not in the record costs 3 seconds, and you keep going.</li>
+      <li>You have 25 seconds per prompt. Close spellings are corrected for you. Anything not in the record costs 3 seconds, and you keep going.</li>
       <li>Obvious answers barely move you. Rare ones send the lantern deeper. Every point is a year back in time.</li>
       <li>Every prompt hides one answer almost nobody gives. Find it and it's <em>Lost to History</em>: 100 years in one drop.</li>
     </ol>
@@ -379,7 +374,7 @@ const digits = s => (s.match(/\d+/g)||[]).join(",");
 function match(input, P){
   const n = norm(input); if(!n) return null;
   for(const e of P.entries) if(e.keys.includes(n)) return e;
-  const th = n.length<5?0 : n.length<9?1 : 2;
+  const th = n.length<4?0 : n.length<7?1 : n.length<12?2 : 3;
   if(!th) return null;
   let best=null, bd=99;
   for(const e of P.entries) for(const k of e.keys){
@@ -600,44 +595,9 @@ function paintYear(v){
 function mixHex(a,b,t){const A=parseInt(a.slice(1),16),B=parseInt(b.slice(1),16);const f=s=>Math.round(((A>>s)&255)*(1-t)+((B>>s)&255)*t);return "#"+[f(16),f(8),f(0)].map(v=>v.toString(16).padStart(2,"0")).join("");}
 function shakeScene(big){ if(REDUCE) return; const s=$("scene"); s.classList.remove("shake","big"); void s.offsetWidth; s.classList.add("shake"); if(big) s.classList.add("big"); }
 
-/* ============ suggestions ============ */
-function suggest(P, text){
-  const n=norm(text); if(n.length<3) return [];
-  const out=[];
-  for(const e of P.entries){
-    let best=Infinity;
-    for(const k of e.keys){
-      if(k===n) best=Math.min(best,0);
-      else if(k.startsWith(n)) best=Math.min(best,1+k.length/200);
-      else if(k.split(" ").some(w=>w.startsWith(n))) best=Math.min(best,2+k.length/200);
-      else if(n.length>=5 && Math.abs(k.length-n.length)<=2 && digits(k)===digits(n)){ const d=lev(n,k); if(d<=2) best=Math.min(best,3+d); }
-    }
-    if(best<Infinity) out.push({e,best});
-  }
-  return out.sort((a,b)=>a.best-b.best).slice(0,4).map(o=>o.e);
-}
-function attachSuggest(inp, P, pick){
-  const box=$("sugg"); let list=[], sel=-1;
-  const draw=()=>{
-    if(!list.length){ box.hidden=true; box.innerHTML=""; return; }
-    box.hidden=false;
-    box.innerHTML=list.map((e,i)=>`<button type="button" role="option" aria-selected="${i===sel}" data-i="${i}"><span>${esc(e.name)}</span>${i===sel?'<span class="hint">↵ dig</span>':""}</button>`).join("");
-    [...box.children].forEach(b=>{ b.onpointerdown=ev=>{ ev.preventDefault(); pick(list[+b.dataset.i]); }; });
-  };
-  inp.addEventListener("input",()=>{ list=suggest(P, inp.value); sel=list.length?0:-1; draw(); });
-  inp.addEventListener("keydown",ev=>{
-    if(box.hidden) return;
-    if(ev.key==="ArrowDown"){ ev.preventDefault(); sel=(sel+1)%list.length; draw(); }
-    else if(ev.key==="ArrowUp"){ ev.preventDefault(); sel=(sel-1+list.length)%list.length; draw(); }
-    else if(ev.key==="Escape"){ ev.preventDefault(); list=[]; sel=-1; draw(); }
-    else if(ev.key==="Tab"&&sel>=0){ ev.preventDefault(); inp.value=list[sel].name; }
-  });
-  return { current:()=> (!box.hidden&&sel>=0)?list[sel]:null, clear:()=>{ list=[]; sel=-1; draw(); } };
-}
-
 /* ============ game ============ */
 const LEN=7, SECS=25, PENALTY=3;
-let mode="daily", view="", roundEnd=0, wrongs=0, G=null, sg=null;
+let mode="daily", view="", roundEnd=0, wrongs=0, G=null;
 function hud(l,r){ if(l!==undefined) $("hud-l").textContent=l; if(r!==undefined) $("hud-r").textContent=r; }
 function stage(html){ $("stage").innerHTML=`<div class="panel">${html}</div>`; }
 function fmtDate(key){const [y,m,d]=key.split("-").map(Number);return new Date(y,m-1,d).toLocaleDateString(undefined,{month:"short",day:"numeric"});}
@@ -668,7 +628,7 @@ function home(){
   stage(`<div class="card">
       <div class="eyebrow">${daily?`${title()} · ${esc(fmtDate(G.key))}`:"Unlimited · a fresh set of seven"}</div>
       <h2 class="q">${daily?"Obvious answers barely move you. Rare ones send the lantern back through the centuries.":"Same dig, no daily limit. Seven new prompts every run."}</h2>
-      <p class="lede">Seven prompts, 25 seconds each. Suggestions appear as you type; Enter digs the highlighted one. Every point is a year further into the past.</p>
+      <p class="lede">Seven prompts, 25 seconds each. Close spellings are corrected for you. Every point is a year further into the past.</p>
       <button class="btn wide" id="go">${G.res.length?`Resume at prompt ${G.res.length+1}`:daily?"Begin dig":"Begin a new dig"}</button>
       ${!daily&&best?`<p class="small">Deepest unlimited run: ${best} years back, to ${BASE-best}.</p>`:""}
     </div>
@@ -687,14 +647,11 @@ function play(){
     <h2 class="q">${esc(P.q)}</h2>
     <div class="timer" id="timer"><div class="cells" id="cells">${"<i></i>".repeat(25)}</div><span class="secs" id="secs">25</span></div>
     <form class="answer" id="form" autocomplete="off">
-      <div class="sugg" id="sugg" hidden role="listbox" aria-label="Suggested answers"></div>
       <div class="in"><input id="ans" type="text" placeholder="Type an answer" aria-label="Your answer" autocapitalize="words" spellcheck="false" enterkeyhint="send" autocomplete="off"><button class="btn" type="submit">Dig</button></div>
     </form>
-    <p class="flash" id="flash">↑↓ choose · ↵ dig · esc to type freely · wrong answers cost ${PENALTY}s</p>`);
+    <p class="flash" id="flash">Close spellings are corrected · wrong answers cost ${PENALTY}s</p>`);
   const inp=$("ans"); inp.focus();
-  sg=attachSuggest(inp, P, e=>commit(e, e.name));
   $("form").onsubmit=e=>{ e.preventDefault(); if(view!=="play") return;
-    const s=sg.current(); if(s) return commit(s, s.name);
     const v=inp.value; if(!v.trim()){ jolt(inp); return; }
     const m=match(v,P); if(m) commit(m,v); else wrongAnswer(inp); };
 }
