@@ -1,0 +1,803 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f0d0b">
+<meta name="description" content="Footnote: a daily American history trivia dig. Seven prompts, 25 seconds each. Rare answers send you further back in time.">
+<title>Footnote</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Public+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: the pixel-art dig site fills the whole viewport as a live backdrop. The HUD (wordmark, prompt counter, year odometer) sits at the top; the prompt panel rises from the bottom. A lantern descends a mine shaft through strata of American history, one year per point. Single committed dark look (a night dig). */
+:root{
+  --bg:#0f0d0b; --bg-tint:#0f0d0b;
+  --raise:rgba(241,233,214,.05); --line:rgba(241,233,214,.16);
+  --paper:#f1e9d6; --muted:#a39a88;
+  --amber:#e0a53a; --gold:#ffd369; --ink-on-amber:#1a1206; --red:#d8604a;
+  --t0:#6b6660; --t1:#9b7756; --t2:#b07fd0; --t3:#5f95dc; --t4:#6bb57e; --t5:#e0a53a; --t6:#ffd369;
+  --pixel:"Silkscreen","Courier New",monospace;
+  --body:"Public Sans","Franklin Gothic Medium",system-ui,sans-serif;
+  color-scheme:dark;
+}
+html{background:var(--bg-tint);transition:background-color 1.5s ease}
+body{background:var(--bg-tint);color:var(--paper);font-family:var(--body);font-size:15px;line-height:1.55;margin:0}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
+
+/* scene + ui: stacked on phones, side by side on wide screens */
+.app{display:grid;grid-template-rows:auto 1fr;min-height:100dvh}
+.scene{position:relative;height:clamp(240px, 44dvh, 440px);overflow:hidden;background:#070a1a;user-select:none;border-bottom:2px solid var(--line)}
+.scene canvas{display:block;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges}
+.shake{animation:shake .32s linear}
+.shake.big{animation:shakebig .45s linear}
+@keyframes shake{20%{transform:translate(-3px,2px)}40%{transform:translate(3px,-2px)}60%{transform:translate(-2px,3px)}80%{transform:translate(2px,-1px)}}
+@keyframes shakebig{15%{transform:translate(-6px,4px)}30%{transform:translate(6px,-3px)}45%{transform:translate(-4px,4px)}60%{transform:translate(4px,-3px)}75%{transform:translate(-2px,2px)}90%{transform:translate(1px,-1px)}}
+.hud{position:absolute;top:8px;font-family:var(--pixel);font-size:11px;letter-spacing:.02em;text-transform:uppercase;color:var(--paper)}
+.hud-l{left:max(16px, env(safe-area-inset-left,0px))}.hud-r{right:max(16px, env(safe-area-inset-right,0px));text-align:right}
+.depth{position:absolute;left:0;right:0;bottom:0;padding:22px 12px 8px;background:linear-gradient(to bottom, rgba(8,6,4,0), rgba(8,6,4,.8) 60%);display:flex;flex-direction:column;align-items:center;gap:2px;pointer-events:none}
+.odo{display:flex;font-family:var(--pixel);font-weight:700;font-size:clamp(36px, 9vw, 56px);line-height:1;color:var(--gold);text-shadow:0 2px 0 #000,0 0 22px rgba(255,211,105,.3)}
+.dg{height:1em;overflow:hidden;width:.72em;text-align:center}
+.strip{display:block;will-change:transform}
+.strip span{display:block;height:1em;line-height:1}
+.era{font-family:var(--pixel);font-size:12px;color:var(--paper);text-transform:uppercase;letter-spacing:.06em;min-height:14px;text-align:center}
+.ui{position:relative;display:flex;flex-direction:column;gap:14px;min-width:0;
+  padding-block:12px calc(16px + env(safe-area-inset-bottom,0px));
+  padding-left:max(16px, env(safe-area-inset-left,0px));padding-right:max(16px, env(safe-area-inset-right,0px))}
+@media (min-width:900px){
+  .app{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);grid-template-rows:none;align-items:start}
+  .scene{position:sticky;top:0;height:100dvh;border-bottom:0;border-right:2px solid var(--line)}
+  .ui{min-height:100dvh;justify-content:center}
+  .odo{font-size:clamp(40px, 5vw, 64px)}
+}
+.shadow{text-shadow:0 1px 0 #000,1px 0 0 #000,0 -1px 0 #000,-1px 0 0 #000,0 2px 8px rgba(0,0,0,.7)}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;max-width:600px;width:100%;margin:0 auto}
+.mark{font-family:var(--pixel);font-weight:700;font-size:22px;letter-spacing:.04em;line-height:1;display:flex;align-items:center;gap:8px}
+.mark img{width:24px;height:24px;image-rendering:pixelated}
+nav{display:flex;gap:6px;flex-wrap:wrap}
+.navb{background:rgba(12,10,8,.65);border:2px solid var(--line);padding:5px 10px;font-family:var(--pixel);font-size:11px;color:var(--muted);text-transform:uppercase;text-shadow:none}
+.navb[aria-pressed="true"]{color:var(--paper);border-color:var(--amber)}
+.navb:hover{color:var(--paper)}
+
+/* panel that rises from the bottom */
+.stage{width:100%;max-width:600px;margin:0 auto;min-width:0}
+.panel{background:rgba(12,10,8,.72);border:2px solid var(--line);padding:18px;display:flex;flex-direction:column;gap:16px;min-width:0;animation:rise .38s cubic-bezier(.2,.8,.2,1) both}
+@keyframes rise{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:none}}
+.card{display:flex;flex-direction:column;gap:14px}
+.enter{animation:enter .32s cubic-bezier(.2,.8,.2,1) both}
+@keyframes enter{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.eyebrow{font-family:var(--pixel);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+h2.q{font-weight:600;font-size:clamp(24px, 6.2vw, 32px);line-height:1.18;margin:0;text-wrap:balance;letter-spacing:-.01em}
+.lede{font-size:16px;margin:0;max-width:60ch}
+.small{font-size:13px;color:var(--muted);margin:0}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.spread{justify-content:space-between}
+.btn{background:var(--amber);color:var(--ink-on-amber);border:2px solid #2a1c08;box-shadow:4px 4px 0 #2a1c08;padding:12px 18px;
+  font-family:var(--pixel);font-weight:700;font-size:13px;text-transform:uppercase;transition:transform .08s,box-shadow .08s}
+.btn:hover{filter:brightness(1.06)}
+.btn:active{transform:translate(3px,3px);box-shadow:1px 1px 0 #2a1c08}
+.btn.ghost{background:transparent;color:var(--paper);border-color:var(--line);box-shadow:4px 4px 0 rgba(241,233,214,.12)}
+.btn.ghost:active{box-shadow:1px 1px 0 rgba(241,233,214,.12)}
+.btn.wide{width:100%}
+.flex1{flex:1 1 160px}
+.wiki{color:inherit;text-decoration:underline dotted;text-decoration-color:var(--muted);text-underline-offset:3px}
+.wiki:hover{color:var(--gold);text-decoration-color:var(--gold)}
+.wiki .ext{font-family:var(--pixel);font-size:.65em;color:var(--muted);margin-left:2px}
+
+/* legend */
+.legend{display:grid;grid-template-columns:auto 1fr auto;gap:0 12px;margin:0}
+.legend > div{display:contents}
+.legend dt,.legend dd{margin:0;padding:8px 0;border-top:1px solid var(--line);display:flex;align-items:center;min-width:0}
+.legend dt{gap:10px;font-family:var(--pixel);font-size:12px;white-space:nowrap}
+.legend dt img{width:30px;height:30px;image-rendering:pixelated;flex:none}
+.legend dd.ex{color:var(--muted);font-size:13px}
+.legend dd.yrs{font-family:var(--pixel);font-size:12px;justify-content:flex-end;white-space:nowrap}
+
+/* play */
+.progress{display:flex;gap:4px}
+.progress i{width:18px;height:8px;background:var(--line)}
+.progress i.cur{background:none;box-shadow:inset 0 0 0 2px var(--amber)}
+.timer{display:flex;align-items:center;gap:10px}
+.cells{flex:1;display:grid;grid-template-columns:repeat(25,1fr);gap:2px;height:10px}
+.cells i{background:var(--amber);transition:opacity .1s}
+.cells i.off{opacity:.15}
+.timer.low .cells i{background:var(--red)}
+.secs{font-family:var(--pixel);font-size:14px;min-width:3.2ch;text-align:right;font-variant-numeric:tabular-nums}
+.timer.low .secs{color:var(--red);animation:pulse .5s steps(2) infinite}
+@keyframes pulse{to{opacity:.35}}
+.timer.hit .cells{animation:hit .4s steps(3)}
+@keyframes hit{50%{filter:brightness(2) saturate(2)}}
+.answer{display:flex;flex-direction:column;gap:8px;position:relative}
+.answer .in{display:flex;gap:10px}
+.answer input{flex:1;min-width:0;background:rgba(0,0,0,.4);border:2px solid var(--line);color:var(--paper);
+  font-family:var(--body);font-weight:500;font-size:22px;padding:10px 12px;border-radius:0}
+.answer input:focus{outline:none;border-color:var(--amber)}
+.answer input::placeholder{color:var(--muted);opacity:.7}
+.sugg{display:flex;flex-direction:column;border:2px solid var(--line);background:rgba(0,0,0,.45);animation:enter .18s both}
+.sugg button{text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:9px 12px;font-size:16px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.sugg button:last-child{border-bottom:0}
+.sugg button[aria-selected="true"]{background:rgba(224,165,58,.16);color:var(--gold)}
+.sugg .hint{font-family:var(--pixel);font-size:10px;color:var(--muted);text-transform:uppercase;white-space:nowrap}
+.flash{min-height:20px;font-family:var(--pixel);font-size:11px;color:var(--muted);text-transform:uppercase}
+.flash.bad{color:var(--red)}
+.jolt{animation:jolt .3s}
+@keyframes jolt{20%{transform:translateX(-7px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(2px)}}
+.float{position:absolute;right:0;top:-6px;font-family:var(--pixel);font-weight:700;color:var(--red);pointer-events:none;animation:floatup .9s ease-out forwards}
+@keyframes floatup{to{transform:translateY(-34px);opacity:0}}
+
+/* reveal */
+.badge{display:flex;align-items:center;gap:14px}
+.badge img{width:72px;height:72px;image-rendering:pixelated;flex:none;animation:pop .5s cubic-bezier(.2,1.7,.4,1) both}
+@keyframes pop{from{transform:scale(.2) rotate(-25deg);opacity:0}60%{transform:scale(1.15) rotate(4deg)}to{transform:none;opacity:1}}
+.tiername{font-family:var(--pixel);font-weight:700;font-size:clamp(20px, 5.4vw, 28px);line-height:1.05;text-transform:uppercase;animation:enter .35s .1s both}
+.tierpts{font-family:var(--pixel);font-size:14px;color:var(--muted);animation:enter .35s .2s both}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:8px 14px;margin:0}
+.kv > div{display:contents}
+.kv dt{font-family:var(--pixel);font-size:11px;color:var(--muted);text-transform:uppercase;padding-top:4px;white-space:nowrap}
+.kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.kv > div:nth-child(1){animation:enter .35s .25s both}.kv > div:nth-child(2){animation:enter .35s .35s both}.kv > div:nth-child(3){animation:enter .35s .45s both}.kv > div:nth-child(4){animation:enter .35s .55s both}
+.big{font-weight:600;font-size:20px;line-height:1.25}
+.gem{color:var(--gold)}
+.crossing{font-family:var(--pixel);font-size:13px;color:var(--amber);margin:0;animation:enter .4s .6s both}
+
+/* results */
+.ledger{list-style:none;margin:0;padding:0}
+.ledger li{display:grid;grid-template-columns:1fr auto;gap:2px 12px;padding:10px 0;border-top:1px solid var(--line);align-items:center}
+.ledger .pq{grid-column:1/-1;font-size:12.5px;color:var(--muted)}
+.ledger .pa{font-weight:600;font-size:17px;min-width:0;overflow-wrap:anywhere}
+.chip{font-family:var(--pixel);font-size:11px;white-space:nowrap;text-transform:uppercase}
+.share{width:100%;min-height:96px;background:rgba(0,0,0,.35);color:var(--paper);border:2px solid var(--line);font-family:var(--pixel);font-size:12px;padding:10px}
+.stat{display:flex;gap:18px;flex-wrap:wrap}
+.stat b{font-family:var(--pixel);font-size:18px;display:block;color:var(--gold)}
+.stat span{color:var(--muted);text-transform:uppercase;font-family:var(--pixel);font-size:10px}
+
+/* help */
+.overlay{position:fixed;inset:0;background:rgba(5,4,3,.8);display:flex;align-items:flex-end;justify-content:center;z-index:20;
+  padding:env(safe-area-inset-top,0px) max(12px, env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(12px, env(safe-area-inset-left,0px))}
+@media (min-width:640px){.overlay{align-items:center}}
+.sheet{background:var(--bg);border:2px solid var(--line);max-width:520px;width:100%;max-height:88vh;overflow:auto;padding:22px;display:flex;flex-direction:column;gap:14px}
+.sheet h3{font-family:var(--pixel);font-weight:700;font-size:22px;margin:0;text-transform:uppercase}
+.sheet ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body style="margin:0">
+
+<div class="app">
+  <section class="scene" id="scene" aria-label="Dig site">
+    <canvas id="cv" width="128" height="72"></canvas>
+    <div class="hud hud-l shadow" id="hud-l">Daily dig</div>
+    <div class="hud hud-r shadow" id="hud-r"></div>
+    <div class="depth">
+      <div class="odo" id="odo" aria-live="polite" aria-label="Year reached"></div>
+      <div class="era shadow" id="era"></div>
+    </div>
+  </section>
+  <div class="ui">
+    <header class="top shadow">
+      <div class="mark"><img id="markimg" alt="">FOOTNOTE</div>
+      <nav>
+        <button class="navb" id="nav-daily" aria-pressed="true">Daily</button>
+        <button class="navb" id="nav-unl" aria-pressed="false">Unlimited</button>
+        <button class="navb" id="nav-fs">Full screen</button>
+        <button class="navb" id="nav-help" aria-label="How to play">?</button>
+      </nav>
+    </header>
+    <main class="stage" id="stage"></main>
+  </div>
+</div>
+
+<div class="overlay" id="help" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="help-h">
+    <h3 id="help-h">How to dig</h3>
+    <ol>
+      <li>Seven prompts a day, the same for everyone. Each asks for something from American history.</li>
+      <li>You have 25 seconds per prompt. Suggestions appear as you type; Enter digs the highlighted one. Anything not in the record costs 3 seconds, and you keep going.</li>
+      <li>Obvious answers barely move you. Rare ones send the lantern deeper. Every point is a year back in time.</li>
+      <li>Every prompt hides one answer almost nobody gives. Find it and it's <em>Lost to History</em>: 100 years in one drop.</li>
+    </ol>
+    <dl class="legend" id="help-legend"></dl>
+    <p class="small">Unlimited plays the same way, with a fresh set of seven prompts every run. Answers on the reveal screen link to Wikipedia if you want to read more.</p>
+    <button class="btn wide" id="help-close">Begin dig</button>
+  </div>
+</div>
+
+<script>
+/* ============ tiers & data ============ */
+const TIERS = {
+  0:{name:"Nothing unearthed", pts:0,   sq:"⬛", add:0,  c:"--t0", desc:"Time ran out."},
+  1:{name:"Topsoil",           pts:10,  sq:"🟫", add:8,  c:"--t1", desc:"The answer everyone blurts out."},
+  2:{name:"Pub Quiz",          pts:15,  sq:"🟪", add:8,  c:"--t2", desc:"Feels obscure. Everyone reaches for it."},
+  3:{name:"Textbook",          pts:30,  sq:"🟦", add:9,  c:"--t3", desc:"Solid, and plenty of people know it."},
+  4:{name:"Archive",           pts:60,  sq:"🟩", add:10, c:"--t4", desc:"Genuinely uncommon."},
+  5:{name:"Footnote",          pts:85,  sq:"🟨", add:12, c:"--t5", desc:"A small minority land these."},
+  6:{name:"Lost to History",   pts:100, sq:"🌟", add:16, c:"--t6", desc:"The gem buried in every prompt."}
+};
+const REMAP = {1:1, 2:3, 3:4, 4:5, 5:6};
+const PUBQUIZ = [
+ ["Millard Fillmore","Chester A. Arthur","James K. Polk"],["Shiloh","Chancellorsville"],["Delaware"],["Button Gwinnett"],["Oklahoma"],["Dolley Madison"],["Squanto"],["War of 1812"],["Eli Whitney","Nikola Tesla"],["Marbury v. Madison"],["Aaron Burr","Thomas Paine"],["USS Monitor","CSS Virginia"],["George Pickett","Ambrose Burnside"],["Jay Gould"],["Little Rock Nine"],["Herman Melville"],["Trenton","Cowpens"],["Betsy Ross"],["Roanoke"],["Aaron Burr","Dan Quayle"],["Tennessee"],["John Brown"],["Tennessee Valley Authority"],["Louisiana"],["Apollo 13"],["Doc Holliday"],["Baltimore"],["Mayflower Compact","Federalist Papers"],
+["Third Amendment"],["War"],["William Seward"],["Hot Springs","Gateway Arch"],["William Henry Harrison"],["John Jay"],["Cross of Gold"],["Wampanoag"],["Panama Canal Zone"],["Kitchen Debate"],["Curtis LeMay"],["Know Nothing Party"],["Leopold and Loeb"],["Victoria Woodhull"],["Tippecanoe","Silent Cal"],["Watergate"],["Triangle Shirtwaist Fire"],["Zebulon Pike"],["Elihu Root"],["Shays' Rebellion"],["Ida Tarbell"],["Lunch atop a Skyscraper"],["Fort McHenry"],["Chuck Yeager"],["Eliot Ness"],["Huey Long"],["Benedict Arnold"],["Countee Cullen"],["Kasserine Pass"],["The Hermitage"]
+];
+const RAW = [
+["Name a U.S. president",
+"George Washington|Washington=1;Abraham Lincoln|Lincoln|Abe Lincoln=1;Thomas Jefferson|Jefferson=1;Franklin D. Roosevelt|FDR|Franklin Roosevelt|Roosevelt=1;John F. Kennedy|JFK|Kennedy=1;Barack Obama|Obama=1;Donald Trump|Trump=1;Joe Biden|Biden=1;Bill Clinton|Clinton=1;George W. Bush|Bush|George Bush|W Bush=1;Ronald Reagan|Reagan=2;Theodore Roosevelt|Teddy Roosevelt|TR=2;George H. W. Bush|HW Bush|George HW Bush|Bush Sr=2;Richard Nixon|Nixon=2;Jimmy Carter|Carter=2;Dwight D. Eisenhower|Eisenhower|Ike=2;Harry Truman|Truman=2;Ulysses S. Grant|Grant=2;John Adams|Adams=2;James Madison|Madison=2;Andrew Jackson|Jackson=2;Woodrow Wilson|Wilson=2;Lyndon B. Johnson|LBJ|Lyndon Johnson|Johnson=2;Gerald Ford|Ford=3;James Monroe|Monroe=3;John Quincy Adams|JQA=3;James K. Polk|Polk=3;Martin Van Buren|Van Buren=3;Calvin Coolidge|Coolidge=3;Herbert Hoover|Hoover=3;William Howard Taft|Taft=3;William McKinley|McKinley=3;Warren G. Harding|Harding=3;Grover Cleveland|Cleveland=3;Andrew Johnson=3;Rutherford B. Hayes|Hayes=4;James Garfield|Garfield=4;Chester A. Arthur|Chester Arthur|Arthur=4;William Henry Harrison|Harrison=4;John Tyler|Tyler=4;Zachary Taylor|Taylor=4;Millard Fillmore|Fillmore=4;Franklin Pierce|Pierce=4;James Buchanan|Buchanan=4;Benjamin Harrison=5"],
+["Name a battle of the Civil War",
+"Gettysburg=1;Antietam|Sharpsburg=2;First Bull Run|Bull Run|First Manassas|Manassas=2;Fort Sumter|Sumter=2;Shiloh|Pittsburg Landing=2;Vicksburg=2;Second Bull Run|Second Manassas=3;Fredericksburg=3;Chancellorsville=3;Chickamauga=3;Atlanta=3;Petersburg=3;The Wilderness|Wilderness=3;Chattanooga|Lookout Mountain|Missionary Ridge=3;Appomattox|Appomattox Court House=3;Fort Wagner|Battery Wagner=4;Spotsylvania|Spotsylvania Court House=4;Cold Harbor=4;Franklin=4;Nashville=4;Pea Ridge=4;Wilson's Creek=4;Glorieta Pass=4;Mobile Bay=4;Fort Donelson=4;Stones River|Murfreesboro=4;Perryville=4;Cedar Creek=4;Sailor's Creek|Sayler's Creek=4;The Crater=4;Monocacy=4;Brandy Station=4;Olustee=4;Hampton Roads=4;Seven Pines|Fair Oaks=4;Malvern Hill=4;Kennesaw Mountain=4;Palmito Ranch|Palmito Hill=5"],
+["Name one of the original 13 colonies",
+"Virginia=1;Massachusetts|Massachusetts Bay=1;New York=1;Pennsylvania=1;New Jersey=2;Georgia=2;Maryland=2;Connecticut=2;North Carolina=2;South Carolina=2;New Hampshire=3;Delaware=4;Rhode Island|Rhode Island and Providence Plantations=5"],
+["Name a signer of the Declaration of Independence",
+"Thomas Jefferson|Jefferson=1;John Hancock|Hancock=1;Benjamin Franklin|Ben Franklin|Franklin=1;John Adams|Adams=1;Samuel Adams|Sam Adams=2;Roger Sherman=3;Benjamin Rush=3;Richard Henry Lee=3;Charles Carroll|Charles Carroll of Carrollton=3;Elbridge Gerry=3;Robert Morris=3;Caesar Rodney=3;John Witherspoon=4;Stephen Hopkins=4;Benjamin Harrison V|Benjamin Harrison=4;Josiah Bartlett=4;George Wythe=4;Button Gwinnett=4;Lyman Hall=4;George Walton=4;Thomas McKean=4;Francis Hopkinson=4;Richard Stockton=4;John Hart=4;Abraham Clark=4;Thomas Nelson Jr.|Thomas Nelson=4;Carter Braxton=4;Francis Lightfoot Lee=4;William Floyd=4;Philip Livingston=4;Francis Lewis=4;Lewis Morris=4;Oliver Wolcott=4;William Williams=4;Samuel Huntington=4;William Ellery=4;Matthew Thornton=4;William Whipple=4;Robert Treat Paine=4;James Wilson=4;George Clymer=4;James Smith=4;George Taylor=4;George Ross=4;John Morton=4;George Read=4;Samuel Chase=4;William Paca=4;Thomas Stone=4;Joseph Hewes=4;William Hooper=4;John Penn=4;Edward Rutledge=4;Thomas Heyward Jr.|Thomas Heyward=4;Arthur Middleton=4;Thomas Lynch Jr.|Thomas Lynch=5"],
+["Name a state that includes land from the Louisiana Purchase",
+"Louisiana=1;Missouri=2;Arkansas=2;Iowa=3;Nebraska=3;Kansas=3;Oklahoma=3;South Dakota=3;North Dakota=3;Montana=3;Wyoming=4;Colorado=4;Minnesota=4;Texas=4;New Mexico=5"],
+["Name a First Lady of the United States",
+"Michelle Obama=1;Jacqueline Kennedy|Jackie Kennedy|Jackie O|Jacqueline Kennedy Onassis=1;Eleanor Roosevelt=1;Martha Washington=1;Hillary Clinton|Hillary Rodham Clinton=1;Melania Trump=1;Jill Biden=1;Laura Bush=2;Barbara Bush=2;Nancy Reagan=2;Abigail Adams=2;Dolley Madison|Dolly Madison=2;Mary Todd Lincoln=2;Betty Ford=3;Rosalynn Carter=3;Lady Bird Johnson=3;Pat Nixon=3;Mamie Eisenhower=3;Bess Truman=3;Edith Wilson|Edith Bolling Wilson=3;Lou Hoover=4;Grace Coolidge=4;Florence Harding=4;Helen Taft=4;Edith Roosevelt=4;Ida McKinley=4;Frances Cleveland=4;Caroline Harrison=4;Lucretia Garfield=4;Lucy Hayes=4;Julia Grant=4;Eliza Johnson=4;Jane Pierce=4;Abigail Fillmore=4;Margaret Taylor=4;Sarah Polk=4;Julia Tyler=4;Letitia Tyler=4;Anna Harrison=4;Louisa Adams=4;Elizabeth Monroe=4;Harriet Lane=5"],
+["Name a Native American leader",
+"Sitting Bull=1;Crazy Horse=1;Geronimo=1;Pocahontas=1;Sacagawea|Sacajawea=1;Tecumseh=2;Chief Joseph|Joseph=2;Squanto|Tisquantum=2;Red Cloud=3;Cochise=3;Pontiac=3;Black Hawk=3;Sequoyah=3;Massasoit=3;Powhatan|Wahunsenacawh=3;Osceola=3;Chief Seattle|Seattle|Sealth=3;Tenskwatawa|The Prophet=4;Metacom|King Philip|Metacomet=4;Quanah Parker=4;Little Crow=4;Kintpuash|Captain Jack=4;Standing Bear=4;Wovoka=4;Joseph Brant|Thayendanegea=4;John Ross=4;Washakie=4;Manuelito=4;Red Jacket=4;Gall=4;Mangas Coloradas=4;Victorio=4;Popé|Pope|Po'pay=5"],
+["Name a war or armed conflict the U.S. fought",
+"Civil War|American Civil War=1;Revolutionary War|American Revolution|War of Independence|Revolution=1;World War II|WWII|WW2|World War 2|World War Two|Second World War=1;World War I|WWI|WW1|World War 1|World War One|First World War|Great War=1;Vietnam War|Vietnam=1;Korean War|Korea=2;War of 1812=2;Gulf War|Persian Gulf War|Desert Storm=2;Iraq War|Iraq=2;War in Afghanistan|Afghanistan War|Afghanistan=2;Mexican-American War|Mexican War=2;Spanish-American War=2;French and Indian War|Seven Years War=3;Philippine-American War=3;Invasion of Grenada|Grenada=3;Invasion of Panama|Panama=3;Barbary Wars|First Barbary War|Barbary War|Tripolitan War=4;Black Hawk War=4;Seminole Wars|Seminole War=4;Banana Wars=4;King Philip's War=4;Pequot War=4;Dakota War|Dakota War of 1862=4;Modoc War=4;Nez Perce War=4;Boxer Rebellion=4;Aroostook War=4;Kosovo War|Kosovo=4;Quasi-War|Quasi War=5"],
+["Name an American inventor",
+"Thomas Edison|Edison=1;Benjamin Franklin|Ben Franklin|Franklin=1;Wright Brothers|Orville Wright|Wilbur Wright=1;Alexander Graham Bell|Bell=1;Henry Ford|Ford=1;Nikola Tesla|Tesla=2;Eli Whitney|Whitney=2;Samuel Morse|Morse=2;George Washington Carver|Carver=2;Steve Jobs=2;Robert Fulton=3;Cyrus McCormick=3;Charles Goodyear=3;Elias Howe=3;Isaac Singer=3;George Westinghouse=3;John Deere=3;Elisha Otis=3;Philo Farnsworth=3;Garrett Morgan=3;Madam C. J. Walker|Madam CJ Walker|Madame CJ Walker=3;Hedy Lamarr=3;George Eastman=3;Samuel Colt=3;Lewis Latimer=4;Granville Woods=4;Margaret Knight=4;Elijah McCoy=4;Josephine Cochrane=4;Mary Anderson=4;Willis Carrier=4;Lee de Forest=4;Charles Kettering=4;Gail Borden=4;Jan Matzeliger|Jan Ernst Matzeliger=4;Stephanie Kwolek=4;Percy Spencer=4;Jack Kilby=4;Oliver Evans=5"],
+["Name a U.S. Supreme Court case",
+"Brown v. Board of Education|Brown v Board|Brown=1;Roe v. Wade|Roe=1;Marbury v. Madison|Marbury=2;Miranda v. Arizona|Miranda=2;Plessy v. Ferguson|Plessy=2;Dred Scott v. Sandford|Dred Scott=2;Dobbs v. Jackson|Dobbs=2;Obergefell v. Hodges|Obergefell=3;Gideon v. Wainwright|Gideon=3;Citizens United v. FEC|Citizens United=3;McCulloch v. Maryland|McCulloch=3;Gibbons v. Ogden|Gibbons=3;Korematsu v. United States|Korematsu=3;Loving v. Virginia|Loving=3;Mapp v. Ohio|Mapp=3;Tinker v. Des Moines|Tinker=3;Bush v. Gore=3;United States v. Nixon|US v Nixon=3;Worcester v. Georgia|Worcester=4;Lochner v. New York|Lochner=4;Schenck v. United States|Schenck=4;Engel v. Vitale|Engel=4;Griswold v. Connecticut|Griswold=4;Baker v. Carr=4;District of Columbia v. Heller|Heller=4;New York Times v. Sullivan|NYT v Sullivan=4;Texas v. Johnson=4;Wickard v. Filburn|Wickard=4;Shelby County v. Holder|Shelby County=4;Regents v. Bakke|Bakke=4;Terry v. Ohio=4;Dartmouth College v. Woodward|Dartmouth College=4;Fletcher v. Peck=4;Chisholm v. Georgia|Chisholm=5"],
+["Name a Founding Father who never became president",
+"Benjamin Franklin|Ben Franklin|Franklin=1;Alexander Hamilton|Hamilton=1;John Hancock|Hancock=2;Samuel Adams|Sam Adams=2;Patrick Henry=2;Paul Revere=2;John Jay=2;Thomas Paine|Tom Paine=2;Aaron Burr|Burr=3;George Mason=3;Roger Sherman=3;John Dickinson=3;Elbridge Gerry=3;Benjamin Rush=3;John Marshall=3;Henry Knox=3;Marquis de Lafayette|Lafayette=3;Gouverneur Morris=4;Robert Morris=4;Charles Pinckney=4;Charles Cotesworth Pinckney=4;Rufus King=4;Nathanael Greene|Nathaniel Greene=4;Haym Salomon=4;Silas Deane=4;Peyton Randolph=4;Edmund Randolph=4;Oliver Ellsworth=4;James Wilson=4;Charles Carroll=4;Mercy Otis Warren=4;John Rutledge=4;Richard Henry Lee=4;Caesar Rodney=4;Daniel of St. Thomas Jenifer|Daniel of Saint Thomas Jenifer|Jenifer=5"],
+["Name a ship from American history",
+"Mayflower=1;USS Constitution|Old Ironsides|Constitution=2;USS Maine|Maine=2;USS Arizona|Arizona=2;USS Monitor|Monitor=2;USS Missouri|Missouri=2;CSS Virginia|Merrimack|Merrimac|Virginia=3;H. L. Hunley|Hunley|HL Hunley=3;USS Enterprise|Enterprise=3;Amistad|La Amistad=3;Clermont|North River Steamboat=3;Bonhomme Richard=3;SS Edmund Fitzgerald|Edmund Fitzgerald=3;USS Indianapolis|Indianapolis=3;USS Pueblo|Pueblo=4;USS Constellation|Constellation=4;Susan Constant=4;Godspeed=4;Discovery=4;Half Moon|Halve Maen=4;Speedwell=4;Arbella=4;SS Savannah|Savannah=4;Sultana=4;USS Essex|Essex=4;USS Chesapeake|Chesapeake=4;USS Kearsarge|Kearsarge=4;CSS Alabama|Alabama=4;Planter|CSS Planter=5"],
+["Name a Civil War general",
+"Ulysses S. Grant|Grant=1;Robert E. Lee|Lee=1;William Tecumseh Sherman|Sherman=1;Stonewall Jackson|Thomas Jackson|Jackson=1;George McClellan|McClellan=2;George Meade|Meade=2;James Longstreet|Longstreet=2;Philip Sheridan|Sheridan=2;J. E. B. Stuart|JEB Stuart|Stuart=2;Ambrose Burnside|Burnside=2;George Pickett|Pickett=2;P. G. T. Beauregard|Beauregard=2;Joseph Hooker|Hooker=3;John Pope|Pope=3;William Rosecrans|Rosecrans=3;Braxton Bragg|Bragg=3;John Bell Hood|Hood=3;Joseph E. Johnston|Joseph Johnston=3;Albert Sidney Johnston=3;Nathan Bedford Forrest|Forrest=3;Joshua Chamberlain|Chamberlain=3;George Thomas|Thomas=3;Winfield Scott Hancock|Hancock=3;Jubal Early|Early=3;A. P. Hill|AP Hill=3;George Custer|Custer=3;Irvin McDowell|McDowell=3;Winfield Scott=3;Richard Ewell|Ewell=4;John Buford|Buford=4;John Reynolds=4;Benjamin Butler=4;Henry Halleck|Halleck=4;Nathaniel Banks=4;Edmund Kirby Smith|Kirby Smith=4;John S. Mosby|John Mosby|Mosby=4;Lewis Armistead|Armistead=4;Stand Watie|Watie=5"],
+["Name a Gilded Age tycoon",
+"John D. Rockefeller|Rockefeller=1;Andrew Carnegie|Carnegie=1;Cornelius Vanderbilt|Vanderbilt=1;J. P. Morgan|JP Morgan|Morgan=1;Jay Gould|Gould=2;Henry Ford=2;Andrew Mellon|Mellon=3;Henry Clay Frick|Frick=3;George Pullman|Pullman=3;Leland Stanford|Stanford=3;John Jacob Astor|Astor=3;William Randolph Hearst|Hearst=3;Joseph Pulitzer|Pulitzer=3;George Westinghouse|Westinghouse=3;Collis Huntington|Huntington=4;Charles Crocker|Crocker=4;Mark Hopkins=4;James J. Hill|James Hill=4;Jim Fisk|James Fisk=4;Daniel Drew=4;James Buchanan Duke|Buck Duke|James Duke=4;Philip Armour|Armour=4;Gustavus Swift|Swift=4;Marshall Field=4;Richard Sears|Sears=4;E. H. Harriman|Harriman=4;Meyer Guggenheim|Guggenheim=4;Charles M. Schwab|Charles Schwab=4;Hetty Green=5"],
+["Name an event of the civil rights movement",
+"Montgomery Bus Boycott|Montgomery|Bus Boycott=1;March on Washington=1;I Have a Dream|I Have a Dream speech=1;Selma to Montgomery March|Selma|Selma March|Bloody Sunday=2;Brown v. Board of Education|Brown v Board=2;Greensboro sit-ins|Greensboro|Woolworth sit-in|Woolworths sit in=2;Freedom Rides|Freedom Riders=2;Little Rock Nine|Little Rock=2;Civil Rights Act|Civil Rights Act of 1964=2;Voting Rights Act|Voting Rights Act of 1965=2;Assassination of Martin Luther King Jr.|MLK assassination|King assassination=2;Birmingham campaign|Birmingham=3;Freedom Summer=3;Murder of Emmett Till|Emmett Till=3;16th Street Baptist Church bombing|Sixteenth Street Baptist Church bombing|Birmingham church bombing=3;Watts riots|Watts uprising=3;Orangeburg massacre=4;Albany Movement=4;Nashville sit-ins=4;Memphis sanitation strike=4;March Against Fear|Meredith March=4;Ole Miss riot=4;Children's Crusade=4;Poor People's Campaign=4;Royal Ice Cream sit-in=5"],
+["Name an American author who published in the 1800s",
+"Mark Twain|Twain|Samuel Clemens=1;Edgar Allan Poe|Poe|Edgar Allen Poe=1;Walt Whitman|Whitman=1;Emily Dickinson|Dickinson=1;Nathaniel Hawthorne|Hawthorne=2;Herman Melville|Melville=2;Henry David Thoreau|Thoreau=2;Ralph Waldo Emerson|Emerson=2;Louisa May Alcott|Alcott=2;Harriet Beecher Stowe|Stowe=2;Frederick Douglass=2;Washington Irving=3;James Fenimore Cooper=3;Henry Wadsworth Longfellow|Longfellow=3;Henry James=3;Stephen Crane=3;Kate Chopin=3;O. Henry|O Henry=3;Jack London=3;Bret Harte=4;Ambrose Bierce=4;Horatio Alger=4;Sarah Orne Jewett=4;William Dean Howells=4;Harriet Jacobs=4;Margaret Fuller=4;John Greenleaf Whittier=4;Lew Wallace=4;Rebecca Harding Davis=4;Charles Chesnutt=4;Helen Hunt Jackson=4;Paul Laurence Dunbar=4;Susan Warner=5"],
+["Name a battle of the Revolutionary War",
+"Lexington and Concord|Lexington|Concord=1;Bunker Hill|Breed's Hill=1;Saratoga=1;Yorktown|Siege of Yorktown=1;Trenton=2;Fort Ticonderoga|Ticonderoga=2;Princeton=2;Brandywine=3;Long Island|Brooklyn=3;Germantown=3;Monmouth=3;Cowpens=3;Kings Mountain=3;Camden=3;Guilford Court House|Guilford Courthouse=3;Bennington=3;Charleston|Siege of Charleston=3;Oriskany=4;Stony Point=4;White Plains=4;Harlem Heights=4;Savannah=4;Moores Creek Bridge|Moore's Creek=4;Eutaw Springs=4;Great Bridge=4;Quebec=4;Valcour Island=4;Paoli=4;Brier Creek=4;Fort Washington=4;Blue Licks=5"],
+["Name a notable American woman from before 1900",
+"Harriet Tubman|Tubman=1;Susan B. Anthony|Susan B Anthony|Susan Anthony=1;Betsy Ross=1;Sacagawea|Sacajawea=1;Pocahontas=1;Clara Barton=2;Sojourner Truth=2;Elizabeth Cady Stanton=2;Abigail Adams=2;Martha Washington=2;Dolley Madison=2;Annie Oakley=2;Emily Dickinson=2;Louisa May Alcott=2;Harriet Beecher Stowe=2;Lucretia Mott=3;Dorothea Dix=3;Molly Pitcher=3;Deborah Sampson=3;Phillis Wheatley=3;Ida B. Wells|Ida B Wells=3;Jane Addams=3;Elizabeth Blackwell=3;Calamity Jane=3;Nellie Bly=3;Anne Hutchinson=3;Mary Lyon=4;Belva Lockwood=4;Victoria Woodhull=4;Sarah Grimké|Sarah Grimke=4;Angelina Grimké|Angelina Grimke=4;Mercy Otis Warren=4;Lucy Stone=4;Sybil Ludington=4;Mary Edwards Walker=4;Elizabeth Freeman|Mum Bett=5"],
+["Name a European settlement founded in today's U.S. before 1700",
+"Jamestown=1;Plymouth|Plymouth Colony|Plimoth=1;Roanoke|Roanoke Colony|Lost Colony=2;St. Augustine|Saint Augustine=2;Boston=2;New Amsterdam=2;Salem=2;Philadelphia=2;Santa Fe=3;Williamsburg|Middle Plantation=3;Charleston|Charles Town=3;Hartford=3;Providence=3;New Haven=3;Annapolis=3;Fort Orange|Albany|Beverwijck=4;Popham Colony|Popham=4;Fort Christina|New Sweden=4;St. Mary's City|Saint Marys City=4;Germantown=4;Wethersfield=4;Fort Caroline=4;Henricus=4;Dover=4;Newport=4;San Miguel de Gualdape=5"],
+["Name a U.S. vice president",
+"Kamala Harris|Harris=1;Mike Pence|Pence=1;Joe Biden|Biden=1;JD Vance|J. D. Vance|Vance=1;Dick Cheney|Cheney=2;Al Gore|Gore=2;Dan Quayle|Quayle=2;Richard Nixon|Nixon=2;John Adams|Adams=2;Aaron Burr|Burr=2;Thomas Jefferson|Jefferson=3;George H. W. Bush|Bush|George Bush=3;Walter Mondale|Mondale=3;Nelson Rockefeller|Rockefeller=3;Spiro Agnew|Agnew=3;Hubert Humphrey|Humphrey=3;Lyndon B. Johnson|LBJ|Lyndon Johnson=3;Harry Truman|Truman=3;Gerald Ford|Ford=3;John C. Calhoun|Calhoun=3;Martin Van Buren|Van Buren=3;Calvin Coolidge|Coolidge=3;Theodore Roosevelt|Teddy Roosevelt|Roosevelt=3;Chester A. Arthur|Chester Arthur|Arthur=3;John Tyler|Tyler=3;Andrew Johnson=3;Millard Fillmore|Fillmore=4;Henry Wallace|Wallace=4;John Nance Garner|Garner=4;Charles Curtis|Curtis=4;Charles Dawes|Dawes=4;Thomas R. Marshall|Thomas Marshall=4;James S. Sherman|James Sherman=4;Charles W. Fairbanks|Fairbanks=4;Garret Hobart|Hobart=4;Adlai Stevenson I|Adlai Stevenson=4;Levi Morton=4;Thomas Hendricks=4;William Wheeler=4;Schuyler Colfax|Colfax=4;Hannibal Hamlin|Hamlin=4;John C. Breckinridge|Breckinridge=4;George M. Dallas|George Dallas=4;Richard Mentor Johnson=4;Daniel Tompkins=4;Elbridge Gerry|Gerry=4;George Clinton=4;William Rufus King=5"],
+["Name a state that joined the Confederacy",
+"South Carolina=1;Virginia=1;Georgia=1;Alabama=1;Mississippi=1;Texas=1;Louisiana=2;Florida=2;North Carolina=2;Tennessee=2;Arkansas=5"],
+["Name an American abolitionist",
+"Frederick Douglass|Douglass|Frederick Douglas=1;Harriet Tubman|Tubman=1;John Brown=1;William Lloyd Garrison|Garrison=2;Sojourner Truth=2;Harriet Beecher Stowe|Stowe=2;Thaddeus Stevens=3;Charles Sumner|Sumner=3;Wendell Phillips=3;Lucretia Mott=3;Sarah Grimké|Sarah Grimke|Grimke|Grimke sisters=3;Angelina Grimké|Angelina Grimke=3;Theodore Weld=4;Elijah Lovejoy=4;Lydia Maria Child=4;Arthur Tappan=4;Lewis Tappan=4;Gerrit Smith=4;Henry Highland Garnet=4;William Still=4;Levi Coffin=4;David Walker=4;Benjamin Lundy=4;Robert Purvis=4;James Forten=4;Thomas Garrett=4;Harriet Jacobs=4;Benjamin Lay=5"],
+["Name a New Deal program or agency",
+"Civilian Conservation Corps|CCC=1;Works Progress Administration|WPA|Works Projects Administration=1;Social Security|Social Security Administration|SSA|Social Security Act=1;Tennessee Valley Authority|TVA=2;Federal Deposit Insurance Corporation|FDIC=2;Securities and Exchange Commission|SEC=2;National Recovery Administration|NRA=2;Agricultural Adjustment Administration|AAA|Agricultural Adjustment Act=3;Public Works Administration|PWA=3;National Labor Relations Board|NLRB=3;Federal Housing Administration|FHA=3;Civil Works Administration|CWA=3;Federal Emergency Relief Administration|FERA=3;Rural Electrification Administration|REA=4;Home Owners' Loan Corporation|HOLC=4;National Youth Administration|NYA=4;Farm Security Administration|FSA=4;Resettlement Administration=4;Federal Writers' Project=4;Federal Theatre Project|Federal Theater Project=4;Federal Art Project=4;Farm Credit Administration=4;Soil Conservation Service=5"],
+["Name a U.S. state named after a real person",
+"Washington=1;Virginia=2;Pennsylvania=2;Georgia=2;Maryland=3;North Carolina=3;South Carolina=3;Louisiana=3;New York=3;West Virginia=4;Delaware=5"],
+["Name an American space mission or spacecraft",
+"Apollo 11=1;Apollo 13=2;Challenger|Space Shuttle Challenger=2;Project Mercury|Mercury=2;Project Gemini|Gemini=2;Voyager|Voyager 1|Voyager 2=2;Columbia|Space Shuttle Columbia=3;Apollo 1=3;Skylab=3;Friendship 7=3;Hubble|Hubble Space Telescope=3;Pioneer|Pioneer 10=3;Viking|Viking 1=3;Explorer 1=3;Apollo 8=3;Spirit|Opportunity=3;Curiosity=3;Perseverance=3;New Horizons=3;Vanguard=4;Sojourner=4;Freedom 7=4;Mariner|Mariner 4=4;Apollo 17=4;Apollo-Soyuz|Apollo Soyuz=4;Ranger=4;Surveyor=4;Liberty Bell 7=5"],
+["Name a figure of the frontier or the Old West",
+"Billy the Kid=1;Wyatt Earp=1;Jesse James=1;Buffalo Bill|Buffalo Bill Cody|William Cody=1;Wild Bill Hickok|Wild Bill|Hickok=2;Doc Holliday=2;Annie Oakley=2;Calamity Jane=2;Butch Cassidy=2;Sundance Kid|The Sundance Kid=2;Davy Crockett=2;Daniel Boone=2;Kit Carson=2;Pat Garrett=3;Bat Masterson=3;Belle Starr=3;Bass Reeves=3;Black Bart=4;Judge Roy Bean|Roy Bean=4;John Wesley Hardin=4;Cole Younger=4;Sam Bass=4;Johnny Ringo=4;Seth Bullock=4;Nat Love=4;Pearl Hart=4;Mary Fields|Stagecoach Mary=4;Charles Goodnight=4;Ike Clanton=4;Tom Horn=4;Bill Tilghman=5"],
+["Name a city that has served as the U.S. seat of government",
+"Philadelphia=1;New York City|New York=1;Washington, D.C.|Washington DC|Washington=1;Baltimore=3;Annapolis=3;Princeton=4;Trenton=4;York|York Pennsylvania=4;Lancaster=5"],
+["Name an early American document, act, or treaty (before 1900)",
+"Declaration of Independence=1;Constitution|U.S. Constitution=1;Bill of Rights=1;Emancipation Proclamation=1;Gettysburg Address=2;Articles of Confederation=2;Federalist Papers|The Federalist=2;Mayflower Compact=2;Monroe Doctrine=2;Missouri Compromise=2;Louisiana Purchase=2;Common Sense=2;Stamp Act=2;Northwest Ordinance=3;Compromise of 1850=3;Kansas-Nebraska Act=3;Homestead Act=3;Treaty of Paris=3;Fugitive Slave Act=3;Indian Removal Act=3;Alien and Sedition Acts=3;Townshend Acts=3;Intolerable Acts|Coercive Acts=3;Sherman Antitrust Act=3;Chinese Exclusion Act=3;Olive Branch Petition=4;Albany Plan of Union|Albany Plan=4;Fundamental Orders of Connecticut=4;Virginia Declaration of Rights=4;Dawes Act=4;Pendleton Act|Pendleton Civil Service Reform Act=4;Morrill Act=4;Land Ordinance of 1785=4;Jay Treaty=4;Pinckney's Treaty|Treaty of San Lorenzo=4;Treaty of Guadalupe Hidalgo=4;Flushing Remonstrance=5"],
+["Name an amendment to the U.S. Constitution",
+"First Amendment|1st Amendment|1st|First|Freedom of Speech|Free Speech|Freedom of Religion=1;Second Amendment|2nd Amendment|2nd|Second|Right to Bear Arms=1;Thirteenth Amendment|13th Amendment|13th|Thirteenth|Abolition of Slavery=2;Nineteenth Amendment|19th Amendment|19th|Nineteenth|Women's Suffrage=2;Fourteenth Amendment|14th Amendment|14th|Fourteenth|Equal Protection=2;Fifth Amendment|5th Amendment|5th|Fifth=2;Fourth Amendment|4th Amendment|4th|Fourth=2;Eighteenth Amendment|18th Amendment|18th|Eighteenth|Prohibition=2;Twenty-first Amendment|21st Amendment|21st|Twenty-first|Repeal of Prohibition=3;Fifteenth Amendment|15th Amendment|15th|Fifteenth=3;Twenty-second Amendment|22nd Amendment|22nd|Twenty-second|Term Limits=3;Twenty-sixth Amendment|26th Amendment|26th|Twenty-sixth=3;Tenth Amendment|10th Amendment|10th|Tenth=3;Sixth Amendment|6th Amendment|6th|Sixth=3;Eighth Amendment|8th Amendment|8th|Eighth=3;Third Amendment|3rd Amendment|3rd|Third=3;Sixteenth Amendment|16th Amendment|16th|Sixteenth|Income Tax=3;Seventeenth Amendment|17th Amendment|17th|Seventeenth=3;Twenty-fifth Amendment|25th Amendment|25th|Twenty-fifth=3;Twelfth Amendment|12th Amendment|12th|Twelfth=4;Twentieth Amendment|20th Amendment|20th|Twentieth|Lame Duck Amendment=4;Twenty-fourth Amendment|24th Amendment|24th|Twenty-fourth|Poll Tax=4;Twenty-third Amendment|23rd Amendment|23rd|Twenty-third=4;Seventh Amendment|7th Amendment|7th|Seventh=4;Ninth Amendment|9th Amendment|9th|Ninth=4;Eleventh Amendment|11th Amendment|11th|Eleventh=4;Twenty-seventh Amendment|27th Amendment|27th|Twenty-seventh=5"],
+["Name a U.S. federal executive department, past or present",
+"State|Department of State|State Department=1;Defense|Department of Defense|DoD|Defense Department=1;Treasury|Department of the Treasury|Treasury Department=1;Justice|Department of Justice|DOJ|Justice Department=1;Education|Department of Education=1;Homeland Security|Department of Homeland Security|DHS=2;Agriculture|Department of Agriculture|USDA=2;Energy|Department of Energy=2;Transportation|Department of Transportation=2;Labor|Department of Labor=2;Interior|Department of the Interior=2;Commerce|Department of Commerce=2;Health and Human Services|HHS|Department of Health and Human Services=2;Veterans Affairs|Department of Veterans Affairs|Veterans Administration=3;Housing and Urban Development|HUD|Department of Housing and Urban Development=3;War|Department of War|War Department=3;Navy|Department of the Navy|Navy Department=4;Health, Education, and Welfare|HEW|Department of Health Education and Welfare=4;Post Office|Post Office Department=5"],
+["Name a U.S. Secretary of State",
+"Hillary Clinton|Hillary Rodham Clinton|Clinton=1;John Kerry|Kerry=1;Henry Kissinger|Kissinger=1;Thomas Jefferson|Jefferson=1;Antony Blinken|Tony Blinken|Blinken=1;Marco Rubio|Rubio=1;Colin Powell|Powell=1;Condoleezza Rice|Condi Rice|Rice=1;Madeleine Albright|Albright=2;Mike Pompeo|Pompeo=2;Rex Tillerson|Tillerson=2;James Madison|Madison=2;James Monroe|Monroe=2;John Quincy Adams=2;Daniel Webster|Webster=2;Henry Clay|Clay=2;William Seward|Seward=2;John Marshall=2;James Baker|Baker=3;George Shultz|Shultz=3;Alexander Haig|Haig=3;Cyrus Vance|Vance=3;Dean Rusk|Rusk=3;John Foster Dulles|Dulles=3;Dean Acheson|Acheson=3;Cordell Hull|Hull=3;Martin Van Buren|Van Buren=3;James Buchanan|Buchanan=3;John C. Calhoun|Calhoun=3;William Jennings Bryan|Bryan=3;John Hay|Hay=3;Warren Christopher|Christopher=3;Edmund Muskie|Muskie=4;William Rogers|Rogers=4;Christian Herter|Herter=4;George Marshall=4;James Byrnes|Byrnes=4;Edward Stettinius|Stettinius=4;Henry Stimson|Stimson=4;Frank Kellogg|Kellogg=4;Charles Evans Hughes|Hughes=4;Robert Lansing|Lansing=4;Elihu Root|Root=4;Philander Knox|Knox=4;James G. Blaine|James Blaine|Blaine=4;Hamilton Fish|Fish=4;Lewis Cass|Cass=4;Edward Everett|Everett=4;William Marcy|Marcy=4;Timothy Pickering|Pickering=4;Edmund Randolph|Randolph=4;John Forsyth|Forsyth=4;Abel Upshur|Upshur=4;Richard Olney|Olney=4;Bainbridge Colby|Colby=4;Thomas Bayard|Bayard=4;Elihu Washburne|Washburne=5"],
+["Name a U.S. national park",
+"Yellowstone=1;Yosemite=1;Grand Canyon=1;Zion=2;Glacier=2;Acadia=2;Everglades=2;Great Smoky Mountains|Smoky Mountains|Great Smokies=2;Rocky Mountain=2;Arches=2;Olympic=2;Denali=2;Grand Teton=2;Joshua Tree=2;Sequoia=2;Death Valley=2;Bryce Canyon|Bryce=2;Shenandoah=3;Badlands=3;Mount Rainier|Rainier=3;Crater Lake=3;Mammoth Cave=3;Hot Springs=3;Redwood=3;Big Bend=3;Carlsbad Caverns|Carlsbad=3;Haleakala=3;Hawaii Volcanoes|Hawai'i Volcanoes=3;Canyonlands=3;Capitol Reef=3;Mesa Verde=3;Petrified Forest=3;Saguaro=3;Glacier Bay=3;Kings Canyon=3;Isle Royale=4;Voyageurs=4;Theodore Roosevelt=4;Wind Cave=4;Lassen Volcanic|Lassen=4;Channel Islands=4;Pinnacles=4;Congaree=4;Cuyahoga Valley|Cuyahoga=4;Indiana Dunes=4;Gateway Arch=4;New River Gorge=4;White Sands=4;Great Basin=4;Guadalupe Mountains=4;Dry Tortugas=4;Biscayne=4;Virgin Islands=4;American Samoa=4;Kenai Fjords=4;Katmai=4;Wrangell-St. Elias|Wrangell St Elias=4;Gates of the Arctic=4;Lake Clark=4;North Cascades=4;Black Canyon of the Gunnison|Black Canyon=4;Great Sand Dunes=4;Kobuk Valley=5"],
+["Name a U.S. president who died in office",
+"Abraham Lincoln|Lincoln=1;John F. Kennedy|JFK|Kennedy=1;Franklin D. Roosevelt|FDR|Franklin Roosevelt|Roosevelt=2;William McKinley|McKinley=2;James Garfield|Garfield=3;William Henry Harrison|Harrison=3;Zachary Taylor|Taylor=4;Warren G. Harding|Harding=5"],
+["Name a chief justice of the U.S. Supreme Court",
+"John Roberts|Roberts=1;John Marshall|Marshall=1;Earl Warren|Warren=1;William Rehnquist|Rehnquist=2;Roger Taney|Taney=2;Warren Burger|Burger=2;John Jay|Jay=2;William Howard Taft|Taft=3;Salmon Chase|Salmon P. Chase|Chase=3;Charles Evans Hughes|Hughes=3;Oliver Ellsworth|Ellsworth=4;Harlan Stone|Harlan Fiske Stone|Stone=4;Fred Vinson|Vinson=4;Melville Fuller|Fuller=4;Morrison Waite|Waite=4;Edward Douglass White|Edward White|White=4;John Rutledge|Rutledge=5"],
+["Name a famous American speech",
+"I Have a Dream=1;Gettysburg Address=1;Give Me Liberty or Give Me Death|Give Me Liberty=2;Ask Not What Your Country Can Do for You|Ask Not|Kennedy Inaugural|JFK Inaugural=2;Day of Infamy|Infamy Speech|Pearl Harbor Address=2;Tear Down This Wall=2;Washington's Farewell Address|Farewell Address=2;Four Freedoms=3;Cross of Gold=3;House Divided|A House Divided=3;Lincoln's Second Inaugural|Second Inaugural=3;Military-Industrial Complex|Eisenhower Farewell Address=3;Checkers Speech|Checkers=3;Ain't I a Woman=3;We Choose to Go to the Moon|Moon Speech|Rice University Speech=3;Fireside Chats|Fireside Chat=3;I've Been to the Mountaintop|Mountaintop=3;The Ballot or the Bullet|Ballot or the Bullet=3;Evil Empire=3;A Time for Choosing=3;Malaise Speech|Crisis of Confidence=3;Silent Majority=3;Atlanta Compromise=4;What to the Slave Is the Fourth of July=4;Sinners in the Hands of an Angry God=4;City upon a Hill|City on a Hill=4;New Frontier=4;Lou Gehrig's Farewell|Luckiest Man=4;The Man with the Muck-rake|Muckrake Speech=4;Return to Normalcy=4;Cooper Union Address|Cooper Union=4;Obama Keynote 2004|2004 Keynote=4;Cornerstone Speech=5"],
+["Name a Native American nation or tribe",
+"Cherokee=1;Navajo|Diné=1;Sioux|Lakota|Dakota=1;Apache=1;Iroquois|Haudenosaunee=2;Comanche=2;Cheyenne=2;Seminole=2;Choctaw=2;Chickasaw=2;Creek|Muscogee=2;Shawnee=2;Mohawk=2;Pueblo=2;Hopi=2;Nez Perce=3;Blackfeet|Blackfoot=3;Crow=3;Pawnee=3;Ute=3;Shoshone=3;Powhatan=3;Wampanoag=3;Pequot=3;Lenape|Delaware=3;Algonquin|Algonquian=3;Ojibwe|Chippewa|Ojibwa=3;Potawatomi=3;Osage=3;Kiowa=3;Arapaho=3;Miami=3;Sauk|Sac=3;Huron|Wyandot=3;Tlingit=3;Inuit=3;Mohegan=4;Narragansett=4;Oneida=4;Onondaga=4;Cayuga=4;Seneca=4;Tuscarora=4;Menominee=4;Ho-Chunk|Winnebago=4;Mandan=4;Hidatsa=4;Arikara=4;Caddo=4;Modoc=4;Paiute=4;Zuni=4;Tohono O'odham|Papago=4;Catawba=4;Lumbee=4;Chumash=4;Yurok=4;Yakama|Yakima=4;Haida=4;Aleut|Unangan=4;Fox|Meskwaki=4;Abenaki=4;Mi'kmaq|Micmac=4;Natchez=5"],
+["Name a U.S. territory, past or present",
+"Puerto Rico=1;Guam=1;Hawaii|Hawaii Territory=1;Alaska|Alaska Territory=1;U.S. Virgin Islands|Virgin Islands=2;American Samoa=2;Northern Mariana Islands|Northern Marianas=2;Philippines|Philippine Islands=2;Panama Canal Zone|Canal Zone=2;Northwest Territory=2;Louisiana Territory=2;Dakota Territory=3;Indian Territory=3;Oregon Territory=3;Utah Territory=3;New Mexico Territory=3;Arizona Territory=3;Washington Territory=3;Kansas Territory=3;Nebraska Territory=3;Colorado Territory=3;Nevada Territory=3;Oklahoma Territory=3;Florida Territory=3;Mississippi Territory=3;Michigan Territory=3;Wake Island=4;Midway|Midway Atoll=4;Idaho Territory=4;Montana Territory=4;Wyoming Territory=4;Illinois Territory=4;Indiana Territory=4;Wisconsin Territory=4;Iowa Territory=4;Minnesota Territory=4;Missouri Territory=4;Alabama Territory=4;Arkansas Territory=4;Orleans Territory|Territory of Orleans=4;Trust Territory of the Pacific Islands=4;Johnston Atoll=4;Palmyra Atoll=4;Navassa Island=4;Southwest Territory=5"],
+["Name a Cold War event involving the United States",
+"Cuban Missile Crisis=1;Vietnam War|Vietnam=1;Korean War|Korea=1;Bay of Pigs|Bay of Pigs Invasion=1;Berlin Airlift=1;Moon Landing|Apollo 11=2;Fall of the Berlin Wall|Berlin Wall=2;Space Race=2;Sputnik=2;Marshall Plan=2;McCarthyism|McCarthy Hearings|Red Scare=2;Truman Doctrine=2;U-2 Incident|U2 Incident|Gary Powers=2;Iran-Contra|Iran Contra Affair=2;Rosenberg Trial|Rosenbergs=3;Founding of NATO|NATO=3;Berlin Crisis=3;Kitchen Debate=3;Détente|Detente=3;SALT|SALT I|SALT Treaty=3;Reykjavik Summit=3;Pueblo Incident=3;Mayaguez Incident=3;Korean Air Lines Flight 007|KAL 007=3;Invasion of Grenada|Grenada=3;Army-McCarthy Hearings=3;Hollywood Blacklist=3;Alger Hiss Case|Alger Hiss=3;Yalta Conference|Yalta=3;Potsdam Conference|Potsdam=3;Duck and Cover=3;Able Archer|Able Archer 83=4;Long Telegram=4;NSC-68|NSC 68=4;Operation Paperclip=4;Guatemalan Coup|1954 Guatemalan coup=4;Suez Crisis=4;Pentagon Papers=4;Nixon in China|Nixon's Visit to China=4;Berlin Tunnel|Operation Gold=4;Operation Mongoose=4;Strategic Defense Initiative|Star Wars|SDI=4;Hungarian Revolution=4;Operation Ajax|1953 Iranian coup=5"],
+["Name a U.S. military leader of World War II",
+"Dwight D. Eisenhower|Eisenhower|Ike=1;George Patton|Patton=1;Douglas MacArthur|MacArthur=1;Chester Nimitz|Nimitz=2;Omar Bradley|Bradley=2;George Marshall|Marshall=2;William Halsey|Bull Halsey|Halsey=2;Jimmy Doolittle|Doolittle=2;Curtis LeMay|LeMay=3;Hap Arnold|Henry Arnold|Arnold=3;Joseph Stilwell|Vinegar Joe|Stilwell=3;Mark Clark=3;Raymond Spruance|Spruance=3;Ernest King|King=3;William Leahy|Leahy=3;Claire Chennault|Chennault=3;Matthew Ridgway|Ridgway=3;Chesty Puller|Lewis Puller|Puller=3;Maxwell Taylor|Taylor=3;James Gavin|Gavin=3;Anthony McAuliffe|McAuliffe=3;Carl Spaatz|Spaatz=4;Courtney Hodges|Hodges=4;William Simpson|Simpson=4;Jacob Devers|Devers=4;Lucian Truscott|Truscott=4;Alexander Patch|Patch=4;J. Lawton Collins|Lightning Joe Collins|Collins=4;Walter Krueger|Krueger=4;Robert Eichelberger|Eichelberger=4;Thomas Kinkaid|Kinkaid=4;Marc Mitscher|Mitscher=4;Frank Jack Fletcher|Fletcher=4;Jonathan Wainwright|Wainwright=4;Alexander Vandegrift|Vandegrift=4;Holland Smith|Howlin' Mad Smith=4;Ira Eaker|Eaker=4;George Kenney|Kenney=4;Theodore Roosevelt Jr.=4;William Darby|Darby=4;Frank Merrill|Merrill=4;Terry Allen=4;Troy Middleton|Middleton=4;Simon Bolivar Buckner Jr.|Simon Buckner|Buckner=5"],
+["Name a 19th-century American political party",
+"Democratic Party|Democrats|Democrat=1;Republican Party|Republicans|Republican=1;Whig Party|Whigs|Whig=1;Federalist Party|Federalists|Federalist=2;Democratic-Republican Party|Democratic-Republicans|Jeffersonian Republicans=2;Know Nothing Party|Know Nothings|American Party=2;Free Soil Party|Free Soilers=2;Populist Party|Populists|People's Party=2;Prohibition Party=3;Greenback Party|Greenbacks|Greenback Labor Party=3;Liberty Party=3;Anti-Masonic Party|Anti-Masons=3;Constitutional Union Party=3;National Republican Party|National Republicans=3;Socialist Labor Party=4;Liberal Republican Party|Liberal Republicans=4;Southern Democrats=4;Union Party|National Union Party=4;Nullifier Party|Nullifiers=4;Equal Rights Party|Locofocos=4;Silver Party=4;Silver Republican Party=4;Readjuster Party|Readjusters=5"],
+["Name a famous American trial",
+"O.J. Simpson Trial|OJ Simpson|O.J. Simpson=1;Scopes Trial|Scopes Monkey Trial|Scopes=1;Salem Witch Trials|Salem=1;Lizzie Borden=2;Sacco and Vanzetti=2;Rosenberg Trial|Rosenbergs=2;Lindbergh Kidnapping Trial|Hauptmann Trial|Bruno Hauptmann=2;Chicago Seven|Chicago 7=2;Leopold and Loeb=2;Impeachment of Andrew Johnson|Andrew Johnson Impeachment=3;Impeachment of Bill Clinton|Clinton Impeachment=3;Impeachment of Donald Trump|Trump Impeachment=3;Boston Massacre Trial|Boston Massacre=3;Aaron Burr Treason Trial|Burr Treason Trial=3;John Peter Zenger|Zenger Trial=3;Dred Scott=3;Amistad=3;John Brown=3;Emmett Till Trial|Emmett Till=3;Charles Manson|Manson Trial=3;Rodney King Trial|LAPD Trial=3;Alger Hiss=3;Scottsboro Boys=3;Derek Chauvin=3;Ted Bundy=3;Casey Anthony=3;Menendez Brothers=3;Unabomber|Ted Kaczynski=3;Timothy McVeigh|Oklahoma City Bombing Trial=3;Haymarket Trial|Haymarket=4;Harry Thaw|Trial of the Century=4;Dan White|Twinkie Defense=4;McMartin Preschool=4;Watergate Trial|Watergate Burglars=4;Anne Hutchinson=4;Susan B. Anthony Trial=4;Pullman Strike Trial|Debs Trial=4;Triangle Shirtwaist Trial=4;Lenny Bruce=4;Mary Surratt|Lincoln Conspirators=4;Jack Ruby=4;Big Dan's Tavern=4;Ossian Sweet=5"],
+["Name a woman who ran for U.S. president",
+"Hillary Clinton=1;Kamala Harris=1;Elizabeth Warren=2;Shirley Chisholm=2;Nikki Haley=2;Amy Klobuchar=2;Tulsi Gabbard=2;Jill Stein=2;Carly Fiorina=2;Michele Bachmann=2;Kirsten Gillibrand=3;Marianne Williamson=3;Victoria Woodhull=3;Elizabeth Dole=3;Carol Moseley Braun=3;Pat Schroeder|Patricia Schroeder=4;Belva Lockwood=4;Lenora Fulani=4;Cynthia McKinney=4;Jo Jorgensen=4;Patsy Mink=4;Ellen McCormack=4;Sonia Johnson=4;Linda Jenness=4;Charlene Mitchell=4;Margaret Chase Smith=5"],
+["Name a nickname of a U.S. president",
+"Honest Abe=1;Ike=1;Teddy=1;Tricky Dick=1;Old Hickory=2;The Gipper|Gipper=2;Dubya=2;Silent Cal=2;Slick Willie=2;Father of His Country|Father of Our Country=2;Old Rough and Ready=3;Tippecanoe=3;The Great Communicator|Great Communicator=3;Give 'Em Hell Harry=3;Little Magician=3;His Accidency=3;Old Man Eloquent=3;Young Hickory=3;The Trust Buster|Trust Buster=3;Rough Rider=3;Bull Moose=3;Jack=3;LBJ=3;Big Bill=3;The Comeback Kid|Comeback Kid=3;The Sage of Monticello|Sage of Monticello=4;Unconditional Surrender Grant|Unconditional Surrender=4;Handsome Frank=4;Old Buck=4;Old Kinderhook=4;Rutherfraud=4;The Professor=4;Mr. Nice Guy=4;The Great Engineer=4;Old Tippecanoe=4;The Accidental President=4;The Railsplitter|Rail Splitter=4;Peanut Farmer=4;Elegant Arthur|The Dude President=4;Old Public Functionary=4;His Rotundity=5"],
+["Name a landmark in Washington, D.C.",
+"Washington Monument=1;Lincoln Memorial=1;U.S. Capitol|Capitol|Capitol Building=1;White House=1;Jefferson Memorial=2;Smithsonian|Smithsonian Institution=2;Vietnam Veterans Memorial|Vietnam Memorial|Vietnam Wall=2;National Mall=2;Supreme Court|Supreme Court Building=2;National Archives=2;Library of Congress=2;Ford's Theatre|Fords Theater=2;World War II Memorial|WWII Memorial=3;Martin Luther King Jr. Memorial|MLK Memorial=3;Korean War Veterans Memorial|Korean War Memorial=3;FDR Memorial|Franklin Delano Roosevelt Memorial=3;Reflecting Pool=3;Tidal Basin=3;Union Station=3;National Cathedral|Washington National Cathedral=3;Kennedy Center=3;Watergate|Watergate Complex=3;Air and Space Museum|National Air and Space Museum=3;Natural History Museum|National Museum of Natural History=3;National Museum of African American History and Culture|African American History Museum=3;Holocaust Museum|United States Holocaust Memorial Museum=3;Georgetown=3;Lafayette Square|Lafayette Park=4;Blair House=4;Dupont Circle=4;Smithsonian Castle=4;Bureau of Engraving and Printing=4;Eisenhower Executive Office Building|Old Executive Office Building=4;Old Post Office|Old Post Office Pavilion=4;Embassy Row=4;Treasury Building=4;Grant Memorial|Ulysses S. Grant Memorial=4;Albert Einstein Memorial=4;Peace Monument=4;Washington Navy Yard|Navy Yard=4;Rock Creek Park=4;Howard University=4;Mary McLeod Bethune Memorial=4;Octagon House=4;Frederick Douglass House|Cedar Hill=4;DC War Memorial|District of Columbia War Memorial=5"],
+["Name an American labor leader or labor event",
+"Cesar Chavez=1;Jimmy Hoffa=1;Samuel Gompers=1;Eugene Debs|Eugene V. Debs=1;Mother Jones|Mary Harris Jones=2;Triangle Shirtwaist Fire|Triangle Fire=2;Haymarket Affair|Haymarket Riot|Haymarket=2;Pullman Strike=2;Homestead Strike=2;Dolores Huerta=2;John L. Lewis=2;Walter Reuther=2;A. Philip Randolph=2;Great Railroad Strike of 1877|Railroad Strike of 1877=3;Ludlow Massacre=3;Flint Sit-Down Strike|Flint Sit Down=3;PATCO Strike|Air Traffic Controllers Strike=3;Lawrence Textile Strike|Bread and Roses Strike|Bread and Roses=3;Battle of Blair Mountain|Blair Mountain=3;Joe Hill=3;Big Bill Haywood|Bill Haywood=3;Knights of Labor=3;AFL|American Federation of Labor=3;CIO|Congress of Industrial Organizations=3;IWW|Industrial Workers of the World|Wobblies=3;Molly Maguires=3;Lowell Mill Girls|Lowell Girls=3;Memphis Sanitation Strike=3;Delano Grape Strike|Grape Boycott=3;Matewan|Matewan Massacre=4;Terence Powderly=4;Frances Perkins=4;Steel Strike of 1919=4;Coal Strike of 1902|Anthracite Coal Strike=4;Seattle General Strike=4;Lattimer Massacre=4;Everett Massacre=4;Republic Steel Massacre|Memorial Day Massacre=4;Uprising of the 20,000=4;Philip Murray=4;Sidney Hillman=4;George Meany=4;Bisbee Deportation=5"],
+["Name an American explorer or expedition",
+"Lewis and Clark|Lewis and Clark Expedition|Corps of Discovery=1;Meriwether Lewis=1;William Clark=1;Daniel Boone=1;Neil Armstrong=1;Amelia Earhart=2;Sacagawea=2;Zebulon Pike=2;John Wesley Powell=2;John C. Frémont|John Fremont=2;Robert Peary=2;Matthew Henson=2;Richard Byrd=2;Kit Carson=2;Jedediah Smith=3;Jim Bridger=3;Charles Lindbergh=3;John Muir=3;Sally Ride=3;John Glenn=3;Charles Wilkes|U.S. Exploring Expedition=3;Stephen Long|Long Expedition=3;John Colter=3;Hugh Glass=3;George Rogers Clark=3;Joseph Walker=4;Jim Beckwourth=4;Elisha Kane|Elisha Kent Kane=4;Adolphus Greely|Greely Expedition=4;Frederick Cook=4;Charles Francis Hall=4;Donald MacMillan=4;Benjamin Bonneville=4;Nathaniel Wyeth=4;Robert Stuart=4;Ann Bancroft=4;Will Steger=4;Lincoln Ellsworth=4;Finn Ronne=4;William Beebe=4;Don Walsh=4;John Ledyard=5"],
+["Name an American winner of the Nobel Peace Prize",
+"Barack Obama|Obama=1;Martin Luther King Jr.|MLK|Martin Luther King=1;Jimmy Carter|Carter=1;Theodore Roosevelt|Teddy Roosevelt=2;Woodrow Wilson|Wilson=2;Henry Kissinger|Kissinger=2;Al Gore|Gore=2;Jane Addams=3;George Marshall|George C. Marshall=3;Elie Wiesel=3;Linus Pauling=3;Ralph Bunche=3;Norman Borlaug=3;Cordell Hull=3;Elihu Root=3;Jody Williams=4;Frank Kellogg|Frank B. Kellogg=4;Charles Dawes=4;Nicholas Murray Butler=4;John Mott|John R. Mott=4;American Friends Service Committee|Quakers=4;Emily Greene Balch=5"],
+["Name an event of the Revolutionary era that wasn't a battle",
+"Boston Tea Party=1;Boston Massacre=1;Declaration of Independence=1;Stamp Act=2;Paul Revere's Ride|Midnight Ride=2;Valley Forge=2;Washington Crossing the Delaware|Crossing the Delaware=2;First Continental Congress|Continental Congress=2;Second Continental Congress=2;Intolerable Acts|Coercive Acts=2;Treaty of Paris=2;Common Sense=2;Constitutional Convention=2;Shays' Rebellion|Shays Rebellion=3;Sons of Liberty=3;Townshend Acts=3;Tea Act=3;Sugar Act=3;Quartering Act=3;Proclamation of 1763=3;Olive Branch Petition=3;Articles of Confederation=3;Benedict Arnold's Treason|Arnold's Treason=3;Committees of Correspondence=3;Lee Resolution=4;Suffolk Resolves=4;Newburgh Conspiracy=4;Culper Ring|Culper Spy Ring=4;Franco-American Alliance|Treaty of Alliance=4;Pennsylvania Mutiny=4;Declaratory Act=4;Gaspee Affair|Burning of the Gaspee=5"],
+["Name a Progressive Era reformer or muckraker",
+"Upton Sinclair=1;Theodore Roosevelt|Teddy Roosevelt=1;Jane Addams=1;Ida Tarbell=1;Jacob Riis=2;Woodrow Wilson=2;Lincoln Steffens=2;W. E. B. Du Bois|WEB Du Bois|Du Bois=2;Booker T. Washington=2;Ida B. Wells=2;Robert La Follette|Fighting Bob La Follette=2;Margaret Sanger=2;Susan B. Anthony=2;John Dewey=3;Louis Brandeis=3;Gifford Pinchot=3;Alice Paul=3;Carrie Chapman Catt=3;Nellie Bly=3;Frank Norris=3;Lewis Hine=3;Frances Perkins=3;Eugene Debs=3;Mother Jones=3;Florence Kelley=3;Ray Stannard Baker=4;David Graham Phillips=4;Lillian Wald=4;Walter Rauschenbusch=4;Hiram Johnson=4;Samuel Jones|Golden Rule Jones=4;Tom Johnson=4;Jeannette Rankin=4;Charles Evans Hughes=4;Harvey Wiley=4;Alice Hamilton=4;Edward Bellamy=4;Henry George=4;Jacob Coxey=4;Ben Lindsey=4;Belle Case La Follette=4;Charlotte Perkins Gilman=4;Mary Church Terrell=4;Emma Goldman=4;Walter Lippmann=4;Herbert Croly=5"],
+["Name a famous American photograph or painting",
+"Washington Crossing the Delaware=1;American Gothic=1;Raising the Flag on Iwo Jima|Iwo Jima Flag Raising=1;Migrant Mother=2;Nighthawks=2;V-J Day in Times Square|The Kiss|Times Square Kiss=2;Whistler's Mother=2;Lunch atop a Skyscraper=2;Earthrise=2;Rosie the Riveter|We Can Do It=2;Uncle Sam I Want You|I Want You=2;Campbell's Soup Cans=2;Freedom from Want=3;The Spirit of '76|Spirit of 76=3;Christina's World=3;The Problem We All Live With=3;Trumbull's Declaration of Independence|Declaration of Independence by Trumbull=3;Lansdowne Portrait=3;Gilbert Stuart's Washington|The Athenaeum Portrait=3;Napalm Girl|The Terror of War=3;Kent State Photograph|Kent State=3;The Falling Man=3;Dewey Defeats Truman=3;Flag by Jasper Johns|Flag=3;Autumn Rhythm=3;Blue Marble|The Blue Marble=3;Birmingham Dogs|Birmingham Campaign Photo=4;Saigon Execution=4;Hindenburg Disaster=4;Surrender of Lord Cornwallis|Trumbull's Yorktown=4;The Peaceable Kingdom=4;Watson and the Shark=4;Snap the Whip=4;The Gross Clinic=4;Breezing Up=4;Flower Power=4;The Veteran in a New Field=4;Daughters of Revolution=4;Freedom of Speech=4;The Oxbow=4;Fur Traders Descending the Missouri=4;The Death of General Warren=5"],
+["Name a historic American fort",
+"The Alamo|Alamo=1;Fort Sumter=1;Fort McHenry=1;Fort Knox=1;Fort Ticonderoga=2;Fort Bragg=2;Fort Laramie=2;Fort Necessity=2;Fort Duquesne=2;Fort Pitt=2;Fort Donelson=3;Fort Henry=3;Fort Wagner=3;Fort Pillow=3;Fort Pulaski=3;Fort Monroe=3;Fort Dearborn=3;Fort Stanwix=3;Fort Moultrie=3;Fort Leavenworth=3;Fort Sill=3;Fort Niagara=3;Castillo de San Marcos=3;Fort Jefferson=3;Fort Point=3;Fort Clatsop=3;Fort Mandan=3;Fort Vancouver=3;Fort Snelling=3;Fort Apache=3;Fort Washington=4;Fort Lee=4;Fort Union=4;Fort Riley=4;Fort Caroline=4;Fort Christina=4;Fort Orange=4;Presidio|Presidio of San Francisco=4;Fort Ross=4;Fort Bridger=4;Fort Kearny=4;Fort Phil Kearny=4;Fort Griswold=4;Fort Mifflin=4;Fort Meigs=4;Fort Erie=4;Fort Michilimackinac=4;Fort Mackinac=4;Fort Oswego=4;Fort William Henry=4;Fort Frederica=4;Fort Mose=4;Fort Mims=5"],
+["Name an American aviator",
+"Amelia Earhart=1;Charles Lindbergh=1;Wright Brothers|Orville Wright|Wilbur Wright=1;Chuck Yeager=2;Howard Hughes=2;Jimmy Doolittle=2;Neil Armstrong=2;John Glenn=2;Bessie Coleman=2;Sully Sullenberger|Chesley Sullenberger=2;Eddie Rickenbacker=3;Tuskegee Airmen=3;Glenn Curtiss=3;Wiley Post=3;Jacqueline Cochran|Jackie Cochran=3;Billy Mitchell=3;Richard Byrd=3;Hap Arnold=3;Paul Tibbets=3;Francis Gary Powers|Gary Powers=3;Harriet Quimby=3;Sally Ride=3;Bob Hoover=4;Scott Crossfield=4;Pancho Barnes=4;Clyde Cessna=4;William Boeing=4;Samuel Langley=4;Octave Chanute=4;Katherine Stinson=4;Ruth Law=4;Elinor Smith=4;Louise Thaden=4;Pete Knight=4;Roscoe Turner=4;Frank Luke=4;Benjamin O. Davis Jr.=4;Willa Brown=4;Robin Olds=4;Joe Kittinger=4;Glenn Martin=4;Clarence Chamberlin=4;Cal Rodgers|Calbraith Rodgers=5"],
+["Name a Prohibition-era gangster or figure",
+"Al Capone|Capone=1;Eliot Ness=1;Bonnie and Clyde=1;John Dillinger=1;Lucky Luciano=2;Bugsy Siegel=2;Meyer Lansky=2;Bugs Moran=2;Pretty Boy Floyd=2;Baby Face Nelson=2;Machine Gun Kelly=2;Dutch Schultz=2;Ma Barker=3;Frank Nitti=3;Johnny Torrio=3;Arnold Rothstein=3;Legs Diamond=3;Frank Costello=3;Vito Genovese=3;Carrie Nation|Carry Nation=3;Dean O'Banion=3;Hymie Weiss=3;Owney Madden=3;Albert Anastasia=3;Joe Masseria=4;Salvatore Maranzano=4;Izzy and Moe|Izzy Einstein and Moe Smith=4;Bill McCoy=4;Roy Olmstead=4;Texas Guinan=4;Wayne Wheeler=4;Andrew Volstead=4;Moe Dalitz=4;Waxey Gordon=4;Louis Lepke Buchalter|Lepke=4;Abe Reles=4;Jack Zuta=4;Mabel Walker Willebrandt=4;Nucky Johnson|Enoch Johnson=4;George Remus=5"],
+["Name a notable U.S. senator from before the year 2000",
+"John F. Kennedy|JFK=1;Lyndon B. Johnson|LBJ=1;Joseph McCarthy|Joe McCarthy=1;Ted Kennedy|Edward Kennedy=1;Henry Clay=2;Daniel Webster=2;John C. Calhoun=2;Robert F. Kennedy|Bobby Kennedy|RFK=2;Barry Goldwater=2;Strom Thurmond=2;Robert Byrd=2;Huey Long=2;Charles Sumner=2;Stephen Douglas=2;Hubert Humphrey=3;Everett Dirksen=3;Mike Mansfield=3;Sam Ervin=3;Margaret Chase Smith=3;Robert La Follette=3;Thomas Hart Benton=3;Henry Cabot Lodge=3;William Fulbright|J. William Fulbright=3;George McGovern=3;Eugene McCarthy=3;Bob Dole=3;Jesse Helms=3;Daniel Patrick Moynihan=3;Hiram Revels=3;Blanche Bruce=4;Hattie Caraway=4;George Norris=4;Robert Taft=4;Estes Kefauver=4;Richard Russell=4;Wayne Morse=4;Carl Hayden=4;Arthur Vandenberg=4;Albert Beveridge=4;Hiram Johnson=4;William Borah=4;Roscoe Conkling=4;Rebecca Latimer Felton|Rebecca Felton=5"],
+["Name an officer who fought for the Americans in the Revolutionary War",
+"George Washington|Washington=1;Benedict Arnold|Arnold=1;Marquis de Lafayette|Lafayette=1;Alexander Hamilton|Hamilton=1;Nathanael Greene|Nathaniel Greene|Greene=2;Henry Knox|Knox=2;Horatio Gates|Gates=2;Daniel Morgan|Morgan=2;Francis Marion|Swamp Fox=2;John Paul Jones=2;Baron von Steuben|Von Steuben|Steuben=2;Ethan Allen=2;Anthony Wayne|Mad Anthony Wayne=2;Aaron Burr|Burr=2;Israel Putnam|Putnam=3;Charles Lee=3;John Sullivan|Sullivan=3;Benjamin Lincoln=3;Casimir Pulaski|Pulaski=3;Tadeusz Kosciuszko|Kosciuszko=3;Rochambeau|Comte de Rochambeau=3;Light-Horse Harry Lee|Henry Lee=3;George Rogers Clark=3;John Stark|Stark=3;Thomas Sumter|Sumter=3;Andrew Pickens|Pickens=3;Hugh Mercer|Mercer=3;Richard Montgomery|Montgomery=3;Joseph Warren|Warren=3;Artemas Ward|Ward=4;William Alexander|Lord Stirling=4;John Glover|Glover=4;Nathan Hale=4;Seth Warner=4;William Moultrie|Moultrie=4;Philip Schuyler|Schuyler=4;John Barry|Barry=4;Peter Francisco=4;Johann de Kalb|Baron de Kalb|De Kalb=4;Henry Dearborn|Dearborn=4;William Washington=4;Otho Williams=4;Daniel Shays=4;Marinus Willett|Willett=5"],
+["Name a figure of the Harlem Renaissance",
+"Langston Hughes=1;Zora Neale Hurston=1;Duke Ellington=1;Louis Armstrong=1;Josephine Baker=2;W. E. B. Du Bois|WEB Du Bois=2;Marcus Garvey=2;Countee Cullen=2;Claude McKay=2;Bessie Smith=2;Paul Robeson=2;Alain Locke=3;Jean Toomer=3;Nella Larsen=3;Aaron Douglas=3;James Weldon Johnson=3;Fats Waller=3;Cab Calloway=3;Augusta Savage=3;Jacob Lawrence=3;Ethel Waters=3;Bill Robinson|Bojangles=3;Wallace Thurman=4;Arna Bontemps=4;Rudolph Fisher=4;Gwendolyn Bennett=4;Palmer Hayden=4;A'Lelia Walker=4;Carl Van Vechten=4;Charles S. Johnson=4;Eubie Blake=4;Noble Sissle=4;Richmond Barthé=4;Archibald Motley=4;Fletcher Henderson=4;Florence Mills=4;Jessie Fauset=5"],
+["Name a World War II battle or operation involving U.S. forces",
+"D-Day|Normandy|Operation Overlord=1;Pearl Harbor=1;Iwo Jima=1;Midway=1;Battle of the Bulge|Bulge|Ardennes=1;Okinawa=2;Guadalcanal=2;Bataan|Bataan Death March=2;Coral Sea=2;Leyte Gulf=2;Anzio=2;Operation Torch|Torch=2;Doolittle Raid=2;Market Garden|Operation Market Garden=2;Monte Cassino|Cassino=3;Kasserine Pass=3;Sicily|Operation Husky=3;Hürtgen Forest|Hurtgen Forest=3;Saipan=3;Tarawa=3;Peleliu=3;Philippine Sea|Marianas Turkey Shoot=3;Wake Island=3;Corregidor=3;Salerno=3;Remagen=3;Aachen=3;Guam=3;Tinian=3;Manila=3;Luzon=3;Bougainville=3;Attu=4;Kwajalein=4;Eniwetok=4;Makin=4;Savo Island=4;Santa Cruz Islands=4;Eastern Solomons=4;Cape Esperance=4;Tassafaronga=4;Metz=4;Elsenborn Ridge=4;Schweinfurt Raid|Schweinfurt=4;Ploesti|Operation Tidal Wave=4;Hollandia=4;Buna-Gona|Buna=4;Operation Dragoon|Dragoon=4;Operation Cobra|Cobra=4;Operation Varsity=4;Rapido River=4;Kiska=5"],
+["Name a U.S. president's home or estate",
+"Mount Vernon=1;Monticello=1;Camp David=1;The Hermitage|Hermitage=2;Hyde Park|Springwood=2;Montpelier=2;Sagamore Hill=2;Mar-a-Lago=2;Kennebunkport|Walker's Point=2;Hyannis Port|Kennedy Compound=2;LBJ Ranch|Johnson Ranch=3;Rancho del Cielo|Reagan Ranch=3;Prairie Chapel Ranch|Crawford Ranch=3;Plains=3;Warm Springs|Little White House=3;Campobello=3;Peacefield=3;Highland|Ash Lawn|Ash Lawn-Highland=3;Wheatland=3;Lindenwald=3;Sherwood Forest=3;Berkeley Plantation=3;Lincoln Home|Springfield Home=3;Eisenhower Farm|Gettysburg Farm=3;Spiegel Grove=4;Lawnfield=4;Oak Hill=4;Rapidan Camp=4;Key West Little White House=4;Grant Cottage=4;Lincoln Cottage|President Lincoln's Cottage=4;Poplar Forest=4;Hoover-Minthorn House=4;Wilson House=4;Harding Home=4;Taft House=4;Coolidge Homestead|Plymouth Notch=4;Truman Home=4;Nixon Birthplace=4;Grouseland=5"]
+];
+
+/* ============ matching ============ */
+function norm(s){
+  s = String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
+  s = s.replace(/&/g," and ").replace(/\b(versus|vs)\b/g," v ").replace(/['’`]/g,"")
+       .replace(/[^a-z0-9 ]+/g," ").replace(/\s+/g," ").trim();
+  let prev;
+  do { prev = s; s = s.replace(/^(the|battle of|siege of|president|pres|general|gen|uss|css|ss) /,""); } while (s !== prev);
+  return s;
+}
+function parsePrompt([q, a], pi){
+  const pq = new Set((PUBQUIZ[pi]||[]));
+  const entries = a.split(";").map(x=>x.trim()).filter(Boolean).map(x=>{
+    const i = x.lastIndexOf("=");
+    const names = x.slice(0,i).split("|").map(n=>n.trim());
+    let tier = REMAP[+x.slice(i+1)];
+    if(pq.has(names[0])) tier = 2;
+    return {name:names[0], keys:[...new Set(names.map(norm))], tier};
+  });
+  const owners = {};
+  entries.forEach((e,ix)=>e.keys.forEach(k=>{const w=k.split(" "); if(w.length>1){const l=w[w.length-1]; (owners[l]=owners[l]||new Set()).add(ix);}}));
+  entries.forEach((e,ix)=>{
+    const seen = new Set();
+    e.keys.forEach(k=>{const w=k.split(" "); if(w.length>1) seen.add(w[w.length-1]);});
+    seen.forEach(l=>{ if(l.length>=4 && owners[l].size===1 && !entries.some((o,j)=>j!==ix && o.keys.includes(l))) e.keys.push(l); });
+  });
+  return {q, entries};
+}
+const PROMPTS = RAW.map(parsePrompt);
+function lev(a,b){
+  const m=a.length,n=b.length; if(!m) return n; if(!n) return m;
+  let prev=Array.from({length:n+1},(_,j)=>j), cur=new Array(n+1);
+  for(let i=1;i<=m;i++){cur[0]=i;for(let j=1;j<=n;j++){cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));}[prev,cur]=[cur,prev];}
+  return prev[n];
+}
+const digits = s => (s.match(/\d+/g)||[]).join(",");
+function match(input, P){
+  const n = norm(input); if(!n) return null;
+  for(const e of P.entries) if(e.keys.includes(n)) return e;
+  const th = n.length<5?0 : n.length<9?1 : 2;
+  if(!th) return null;
+  let best=null, bd=99;
+  for(const e of P.entries) for(const k of e.keys){
+    if(k.length<4 || digits(k)!==digits(n)) continue;
+    const d = lev(n,k); if(d<bd){bd=d;best=e;}
+  }
+  return bd<=th ? best : null;
+}
+
+/* ============ utilities ============ */
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const store = {
+  get(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null;}catch(e){return null;}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+};
+function hash(s){let h=2166136261;for(const c of s){h^=c.charCodeAt(0);h=Math.imul(h,16777619);}return h>>>0;}
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function shuffle(arr, r=Math.random){const a=arr.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+const pad = n => String(n).padStart(2,"0");
+function todayKey(d=new Date()){return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;}
+function digNumber(key){const [y,m,d]=key.split("-").map(Number);return Math.floor((Date.UTC(y,m-1,d)-Date.UTC(2026,9,16))/864e5)+1;}
+const sum = res => res.reduce((a,r)=>a+r.pts,0);
+const REDUCE = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ============ pixel art ============ */
+const BASE=2026, SPAN=700, GROUND=36, K=0.55, TW=128, SHAFT_L=56, SHAFT_R=71;
+const WORLD_H=Math.ceil(GROUND+SPAN*K+64);
+let W=128, H=72, XO=0, S=4, off, octx, img, buf;
+function C(hex){const n=parseInt(hex.slice(1),16);const r=n>>16&255,g=n>>8&255,b=n&255;return {r,g,b,u:(255<<24|b<<16|g<<8|r)>>>0};}
+const PAL = {k:C("#0d0b09"), w:C("#f1e9d6"), r:C("#b5342c"), b:C("#2f4b8a"), y:C("#e0a53a"), Y:C("#ffd369"), g:C("#3f6b3a"), G:C("#5f8f4a"),
+  d:C("#3a3a42"), l:C("#9a9aa2"), o:C("#7a4a23"), t:C("#c9a96e"), c:C("#a46a2c"), n:C("#1b2a4a"), p:C("#7fa6d8"), m:C("#8a5fb0"), s:C("#d8d0bc"), e:C("#5a3a3a")};
+const SPR = {
+  lantern:["..k..",".kkk.",".kYk.","kYYYk","kYYYk",".kyk.",".kkk."],
+  floppy:["dddddddd","dlllllld","dllllll.","dddddddd","ddwwwwdd","ddwddwdd","dddddddd"],
+  tv:["..l.....l..","...l...l...","....l.l....",".ooooooooo.",".olllllllo.",".olppppplo.",".olppppplo.",".olllllllo.",".ooooooooo.","..k.....k.."],
+  rocket:["....w....","...www...","...wkw...","...www...","...www...","...wrw...","...www...","..kwwwk..","..k.k.k..","..y.y.y.."],
+  car:["....dddd....","...dddddd...","..dd.dd.ddd.",".dddddddddd.","dddddddddddd",".ll.dddd.ll.","..l......l.."],
+  phono:[".....yyy....","....yyyyy...","...yyyyyyy..","....yyyyy...","......y.....",".....oy.....","....ooooo...","...ooooooo.."],
+  loco:["..dd........","..dd...ddd..",".ddddddddd..",".ddddddddd..","dddddddddddd",".ll.ll.ll.l."],
+  cannon:["ddddddd..",".ddddddd.","..dd..dd.","..oooo...",".o.oo.o..","..oooo..."],
+  bell:["...ooo...","..c.c.c..","..ccccc..",".ccccccc.",".ccccccc.",".ccckccc.","ccccccccc","..ccccc.."],
+  quill:["......w..",".....ww..","....ww...","...ww....","..ww.....",".kk......","kkkk.....","kkkk....."],
+  musket:["..........ll",".......ooo..","....oooo....",".oooo.......","oo.........."],
+  ship:[".....k......","....kwww....","....kwwww...","....kwwwww..","..k.k.......","..kwwwk.....","..kwwwk.....","..k.k.k.....",".ooooooooo..","..ooooooo..."],
+  cabin:["....ooo....","..ooooooo..",".ooooooooo.","ooooooooooo",".oooyyyooo.",".ooo.k.ooo.",".ooo.k.ooo."],
+  anchor:["....l....","...lll...","....l....","..lllll..","....l....",".l..l..l.",".l..l..l.","..llllll."],
+  compass:["....y....","...yyy...","..y.y.y..",".yyyyyyy.","y.y.y.y.y",".yyyyyyy.","..y.y.y..","...yyy...","....y...."],
+  arrow:["...l...","..lll..","..lll..",".lllll.",".lllll.","lllllll","...o...","...o..."],
+  pot:["..ccccc..","...ccc...","..ccccc..",".ccccccc.",".ccrcrcc.",".ccccccc.","..ccccc..","...ccc..."],
+  tusk:["w.......","ww......",".ww.....","..www...","....www.","......ww",".......w"],
+  t0:["..........","..........","..dd..dd..","...dddd...","....dd....","...dddd...","..dd..dd..","..........","..........",".........."],
+  t1:["..........","..g....g..","..g.gg.g..","...gggg...","..oooooo..",".oooooooo.","oooooooooo","oooooooooo","..........",".........."],
+  t2:["..........","...rrrr...","..rrrrrr..",".rrrrrrrr.",".rrrrrrrr.","dddddddddd","dddddddddd",".dddddddd.","..........",".........."],
+  t3:["..........",".bbbbbbbb.",".bwwwwwwb.",".bwwwwwwb.",".bwwwwwwb.",".bwwwwwwb.",".bwwwwwwb.",".bbbbbbbb.","..........",".........."],
+  t4:["..........","tttttttttt","t........t","t.ll..ll.t","tttttttttt","t........t","t.ll..ll.t","tttttttttt","..........",".........."],
+  t5:["..........","....ww....","....ww....","..wwwwww..","....ww....","....ww....","....ww....","....ww....","....ww....",".........."],
+  t6:["....Y.....","....Y.....","...YYY....",".YYYYYYY..","..YYYYY...","..YYYYY...",".YY...YY..","..........","..........",".........."]
+};
+const ARTIFACTS = [
+  [1998,10,"floppy"],[1955,80,"tv"],[1969,30,"rocket"],[1915,84,"car"],[1890,18,"phono"],[1869,86,"loco"],[1863,22,"cannon"],
+  [1815,82,"musket"],[1787,16,"quill"],[1776,92,"bell"],[1700,20,"cabin"],[1620,80,"ship"],[1607,28,"anchor"],[1540,90,"compass"],
+  [1450,20,"arrow"],[1400,92,"pot"],[1350,30,"tusk"]
+];
+const ERAS = [
+  [1992,"The Internet Age","#3a2a1c"],[1946,"Postwar America","#4b321f"],[1914,"The World Wars","#553321"],[1877,"The Gilded Age","#6e3a24"],
+  [1861,"Civil War & Reconstruction","#8a5a2b"],[1816,"Antebellum America","#9a7340"],[1775,"Revolution & Early Republic","#505262"],
+  [1700,"The Colonial Century","#6f6d5c"],[1607,"First Settlements","#4a4f58"],[1492,"First Contact","#2f3540"],[-Infinity,"Before Columbus","#17151c"]
+];
+const eraOf = y => ERAS.find(([s])=>y>=s);
+const yearAt = wy => BASE - (wy-GROUND)/K;
+function spriteURL(name, scale){
+  const s=SPR[name], c=document.createElement("canvas"); c.width=s[0].length*scale; c.height=s.length*scale; const x=c.getContext("2d");
+  s.forEach((row,j)=>[...row].forEach((ch,i)=>{ if(ch!=="."){const p=PAL[ch]; x.fillStyle=`rgb(${p.r},${p.g},${p.b})`; x.fillRect(i*scale,j*scale,scale,scale);} }));
+  return c.toDataURL();
+}
+$("markimg").src = spriteURL("lantern",4);
+
+function pxA(x,y,c,a){
+  x=Math.floor(x); y=Math.floor(y);
+  if(x<0||y<0||x>=W||y>=H) return; const i=y*W+x;
+  if(a===undefined||a>=1){buf[i]=c.u;return;}
+  const o=buf[i], or=o&255, og=(o>>8)&255, ob=(o>>16)&255;
+  const r=or+(c.r-or)*a, g=og+(c.g-og)*a, b=ob+(c.b-ob)*a;
+  buf[i]=(255<<24|b<<16|g<<8|r)>>>0;
+}
+const px=(x,y,c,a)=>pxA(x+XO,y,c,a);
+function rect(x,y,w,h,c,a){for(let j=0;j<h;j++)for(let i=0;i<w;i++)px(x+i,y+j,c,a);}
+function rectA(x,y,w,h,c,a){for(let j=0;j<h;j++)for(let i=0;i<w;i++)pxA(x+i,y+j,c,a);}
+function sprite(name,x,y,a){const s=SPR[name];for(let j=0;j<s.length;j++){const row=s[j];for(let i=0;i<row.length;i++){const ch=row[i];if(ch!==".")px(x+i,y+j,PAL[ch],a);}}}
+const n2 = (x,y) => { let h=(x*374761393 + y*668265263)|0; h=(h^(h>>13))*1274126177|0; return ((h^(h>>16))>>>0)/4294967296; };
+
+const cv=$("cv"), ctx=cv.getContext("2d");
+const SKY=[C("#070a1a"),C("#0b1026"),C("#111a3a"),C("#1a2448"),C("#262c58"),C("#33305a")];
+function lighten(hex,amt){const n=parseInt(hex.slice(1),16);const f=v=>Math.max(0,Math.min(255,v+amt));return "#"+[f(n>>16&255),f(n>>8&255),f(n&255)].map(v=>v.toString(16).padStart(2,"0")).join("");}
+const STRATA = ERAS.map(e=>({start:e[0], c:C(e[2]), light:C(lighten(e[2],22)), dark:C(lighten(e[2],-18))}));
+const stratumAt = wy => { const y=yearAt(wy); return STRATA.find(s=>y>=s.start); };
+const C_HILL=C("#121a2e"), C_SHAFT=C("#060403"), C_GLOW=PAL.Y, C_MOON=C("#e8e2cc"), C_CLOUD=C("#2a3058");
+let hills=[], stars=[], clouds=[], roots=[]; const windows=[]; const part=[];
+let cam=0, camT=0, ly=GROUND+1, lyT=GROUND+1, lvel=0, lx=64, t0=performance.now(), yearShown=BASE;
+const camTarget=()=>Math.max(0, Math.min(Math.max(0,WORLD_H-H), ly-H*0.4));
+
+function resize(){
+  const rr=$("scene").getBoundingClientRect(); const cssW=Math.max(200,rr.width||innerWidth), cssH=Math.max(160,rr.height||240), dpr=Math.min(3,devicePixelRatio||1);
+  const target = cssW<520?3 : cssW<900?4 : 5;
+  W=Math.max(TW,Math.round(cssW/target)); H=Math.max(72,Math.round(cssH/target)); XO=Math.floor((W-TW)/2);
+  off=document.createElement("canvas"); off.width=W; off.height=H; octx=off.getContext("2d"); img=octx.createImageData(W,H); buf=new Uint32Array(img.data.buffer);
+  S=Math.ceil(target*dpr); cv.width=W*S; cv.height=H*S; ctx.imageSmoothingEnabled=false;
+  hills=Array.from({length:W},(_,x)=>Math.round(29+2.2*Math.sin(x*0.09)+1.6*Math.sin(x*0.23+1)+0.8*Math.sin(x*0.5)));
+  stars=Array.from({length:Math.round(W/4)},(_,i)=>({x:Math.floor(n2(i,1)*W), y:Math.floor(n2(i,2)*24), sp:1+n2(i,3)*3, ph:n2(i,4)*6.28}));
+  clouds=[{x:W*0.06,y:11,w:12},{x:W*0.52,y:17,w:9},{x:W*0.8,y:8,w:14}];
+  roots=[]; for(let i=0;i<Math.round(W/9);i++){ let x=Math.floor(n2(i,9)*W); if(x>XO+SHAFT_L-3&&x<XO+SHAFT_R+3) continue; let y=GROUND+2; const len=4+Math.floor(n2(i,10)*7); const pts=[]; for(let k=0;k<len;k++){pts.push([x,y]); y++; x+=Math.round(n2(i,k+20)*2-1);} roots.push(pts); }
+  cam=camT=camTarget();
+}
+if(window.ResizeObserver) new ResizeObserver(()=>resize()).observe($("scene")); addEventListener("resize",resize); resize();
+
+function setScore(pts, instant){
+  lyT = GROUND+1 + pts*K;
+  if(instant||REDUCE){ ly=lyT; lvel=0; cam=camT=camTarget(); }
+}
+function burst(n, wx, wy){ for(let i=0;i<n;i++) part.push({x:wx+(Math.random()*6-3), y:wy+Math.random()*3, vx:(Math.random()-0.5)*0.9, vy:-Math.random()*0.5-0.1, life:30+Math.random()*30, c:Math.random()<0.5?PAL.t:PAL.o, g:0.02}); }
+
+function drawTown(t){
+  const sy = wy => wy - cam;
+  for(let x=0;x<W;x++) for(let y=hills[x]; y<GROUND; y++) pxA(x, sy(y), C_HILL);
+  // countryside filler outside the 128px town
+  const treeA=(x,y,r)=>{ rectA(x, sy(y), 1, GROUND-y, PAL.o); for(let j=-r;j<=r;j++)for(let i=-r;i<=r;i++) if(i*i+j*j<=r*r+1) pxA(x+i, sy(y-1+j), (i+j)%3===0?PAL.G:PAL.g); };
+  for(let x=6;x<XO-8;x+=12+Math.floor(n2(x,5)*8)) treeA(x, 30-Math.floor(n2(x,6)*3), 3+Math.floor(n2(x,7)*3));
+  for(let x=XO+TW+8;x<W-6;x+=12+Math.floor(n2(x,5)*8)) treeA(x, 30-Math.floor(n2(x,6)*3), 3+Math.floor(n2(x,7)*3));
+  if(XO>44){ const bx=XO-42; rectA(bx, sy(27), 16, 9, PAL.r); rectA(bx+1, sy(25), 14, 2, PAL.e); rectA(bx+3, sy(24), 10, 1, PAL.e); rectA(bx+6, sy(31), 4, 5, PAL.k); pxA(bx+3, sy(29), PAL.y); pxA(bx+12, sy(29), PAL.y);
+    for(let x=bx+19;x<XO-3;x+=3) rectA(x, sy(33), 1, 3, PAL.t); rectA(bx+19, sy(34), XO-3-bx-19, 1, PAL.t); }
+  if(W-(XO+TW)>44){ const hx=XO+TW+26; rectA(hx, sy(28), 12, 8, PAL.s); rectA(hx+1, sy(26), 10, 2, PAL.e); rectA(hx+3, sy(25), 6, 1, PAL.e); rectA(hx+5, sy(32), 2, 4, PAL.k); pxA(hx+2, sy(30), PAL.y); pxA(hx+9, sy(30), PAL.y); rectA(hx+8, sy(23), 1, 3, PAL.d); }
+  // left row houses
+  rect(0, sy(27), 7, 9, PAL.e); rect(0, sy(26), 7, 1, PAL.k);
+  rect(7, sy(25), 6, 11, PAL.n); rect(7, sy(24), 6, 1, PAL.k);
+  win(2,29,1); win(4,29,2); win(2,32,3); win(4,32,4); win(9,27,5); win(9,30,6); win(11,30,7);
+  // courthouse
+  rect(13, sy(23), 32, 13, PAL.t); rect(12, sy(35), 34, 1, PAL.l); rect(11, sy(36), 36, 1, PAL.l);
+  for(let i=0;i<4;i++) rect(17+i, sy(19+i), 24-2*i, 1, PAL.s);
+  rect(13, sy(22), 32, 1, PAL.s);
+  rect(25, sy(15), 8, 4, PAL.s); rect(26, sy(14), 6, 1, PAL.s); rect(27, sy(13), 4, 1, PAL.s); rect(28, sy(12), 2, 1, PAL.s);
+  rect(28, sy(4), 1, 8, PAL.l);
+  flag(29, 4, t);
+  [16,20,24,34,38,42].forEach(x=>rect(x, sy(26), 1, 9, PAL.s));
+  rect(27, sy(29), 4, 6, PAL.k); win(18,27,8); win(22,27,9); win(36,27,10); win(40,27,11); win(18,31,12); win(40,31,13);
+  tree(50, 30, 4);
+  // church
+  rect(78, sy(25), 18, 11, PAL.s); rect(78, sy(24), 18, 1, PAL.l);
+  rect(85, sy(12), 4, 13, PAL.s); rect(86, sy(9), 2, 3, PAL.s); rect(86, sy(7), 2, 2, PAL.l); px(87, sy(6), PAL.l); px(86, sy(8), PAL.l); px(88, sy(8), PAL.l);
+  win(81,28,14); win(81,29,14); win(91,28,15); win(91,29,15); win(86,15,16);
+  rect(86, sy(31), 2, 5, PAL.k);
+  // water tower
+  rect(104, sy(11), 10, 6, PAL.d); rect(105, sy(10), 8, 1, PAL.d); rect(106, sy(9), 6, 1, PAL.l);
+  rect(105, sy(17), 1, 19, PAL.l); rect(112, sy(17), 1, 19, PAL.l); rect(108, sy(17), 1, 19, PAL.l);
+  rect(105, sy(24), 8, 1, PAL.l); rect(105, sy(30), 8, 1, PAL.l);
+  tree(120, 29, 5); tree(99, 32, 3);
+  // ground
+  rectA(0, sy(GROUND), W, 1, PAL.G); rectA(0, sy(GROUND+1), W, 1, PAL.g);
+  // windlass over the shaft
+  rect(SHAFT_L+1, sy(GROUND-8), 1, 8, PAL.o); rect(SHAFT_R-1, sy(GROUND-8), 1, 8, PAL.o); rect(SHAFT_L+1, sy(GROUND-8), SHAFT_R-SHAFT_L-1, 1, PAL.o);
+  rect(SHAFT_L-1, sy(GROUND-1), SHAFT_R-SHAFT_L+3, 1, PAL.o);
+  rect(62, sy(GROUND-10), 5, 2, PAL.o); rect(63, sy(GROUND-11), 3, 1, PAL.o);
+  function win(x,y,id){ let w=windows[id]; if(!w){w=windows[id]={flick:0};} px(x, sy(y), w.flick===0?PAL.y:PAL.k); if(w.flick>0) w.flick--; }
+  function tree(x,y,r){ rect(x, sy(y), 1, GROUND-y, PAL.o); for(let j=-r;j<=r;j++) for(let i=-r;i<=r;i++) if(i*i+j*j<=r*r+1) px(x+i, sy(y-1+j), (i+j)%3===0?PAL.G:PAL.g); }
+  function flag(x,y,t){ for(let i=0;i<8;i++){ const dy=Math.round(Math.sin(t*5+i*0.75)*0.9); for(let j=0;j<5;j++){ const c=(i<3&&j<3)?PAL.b:(j%2===0?PAL.r:PAL.w); px(x+i, sy(y+j+dy), c);} } }
+}
+
+function render(now){
+  const t=(now-t0)/1000;
+  const acc=(lyT-ly)*0.012 - lvel*0.11; lvel+=acc; ly+=lvel;
+  camT=camTarget(); cam+=(camT-cam)*0.09;
+  lx = 64 + Math.sin(t*2.4)*Math.min(3, Math.abs(lvel)*5);
+  yearShown = yearAt(ly-1);
+  if(Math.random()<0.02){ const w=windows[Math.floor(Math.random()*windows.length)]; if(w) w.flick=8; }
+  for(let y=0;y<H;y++){
+    const wy=Math.floor(y+cam);
+    if(wy<GROUND){ const c=SKY[Math.min(5,Math.max(0,Math.floor(wy/6)))]; for(let x=0;x<W;x++) buf[y*W+x]=c.u; }
+    else { const st=stratumAt(wy+0.5); const bed=(wy%9===0);
+      for(let x=0;x<W;x++){ const r=n2(x,wy); let c=st.c; if(r<0.07) c=st.light; else if(r>0.93) c=st.dark; else if(bed&&r<0.5) c=st.dark; buf[y*W+x]=c.u; } }
+  }
+  if(cam<GROUND){
+    stars.forEach(s=>{ const a=0.35+0.65*(0.5+0.5*Math.sin(t*s.sp+s.ph)); pxA(s.x, s.y-cam, PAL.w, a*0.8); });
+    const mx=66,my=7-cam; for(let j=-4;j<=4;j++)for(let i=-4;i<=4;i++) if(i*i+j*j<=16) px(mx+i,my+j,C_MOON); px(mx-1,my+1,C_CLOUD,0.5); px(mx+1,my-2,C_CLOUD,0.4); px(mx+2,my+2,C_CLOUD,0.4);
+    clouds.forEach(c=>{ c.x+=0.012; if(c.x>W+8) c.x=-c.w-4; const x=Math.floor(c.x), y=c.y-cam; rectA(x+2,y,c.w-4,1,C_CLOUD,0.9); rectA(x,y+1,c.w,2,C_CLOUD,0.9); rectA(x+3,y+3,c.w-6,1,C_CLOUD,0.9); });
+    drawTown(t);
+  }
+  roots.forEach(pts=>pts.forEach(([x,y])=>pxA(x,y-cam,PAL.o,0.9)));
+  for(let y=0;y<H;y++){ const wy=y+cam; if(wy>GROUND){ const a=Math.min(0.5,(wy-GROUND)/260); for(let x=0;x<W;x++) pxA(x,y,PAL.k,a); } }
+  for(let y=0;y<H;y++){ const wy=Math.floor(y+cam); if(wy>GROUND+1){ for(let x=SHAFT_L;x<=SHAFT_R;x++) px(x,y,C_SHAFT,0.72); px(SHAFT_L,y,PAL.o,0.9); px(SHAFT_R,y,PAL.o,0.9); if((wy-GROUND)%14===0) rect(SHAFT_L+1,y,SHAFT_R-SHAFT_L-1,1,PAL.o,0.85); } }
+  ARTIFACTS.forEach(([yr,x,name])=>{ const wy=Math.round(GROUND+(BASE-yr)*K); const sy=wy-cam; if(sy>-16&&sy<H+4) sprite(name,x,sy,0.95); });
+  const ropeTop=(GROUND-10)-cam; for(let y=Math.max(0,Math.floor(ropeTop)); y<ly-cam; y++) px(Math.round(lx), y, PAL.t, 0.9);
+  const flick=0.85+0.15*Math.sin(t*13)+0.08*Math.sin(t*31);
+  const gx=Math.round(lx), gy=Math.round(ly-cam)+3, R=26;
+  for(let j=-R;j<=R;j++)for(let i=-R;i<=R;i++){ const d=Math.sqrt(i*i+j*j); if(d<R){ let a=(1-d/R); a=a*a*0.7*flick; a=Math.round(a*8)/8; if(a>0) px(gx+i,gy+j,C_GLOW,a*0.8); } }
+  sprite("lantern", gx-2, Math.round(ly-cam));
+  for(let i=part.length-1;i>=0;i--){ const p=part[i]; p.x+=p.vx; p.y+=p.vy; p.vy+=p.g; p.life--; if(p.life<=0){part.splice(i,1);continue;} px(p.x,p.y-cam,p.c,Math.min(1,p.life/20)); }
+  for(let i=0;i<12;i++){ const yy=((t*4+i*37)%(H+10))-5; const xx=SHAFT_L+2+Math.floor(n2(i,77)*(SHAFT_R-SHAFT_L-3)); if(cam+yy>GROUND+2) px(xx+Math.round(Math.sin(t+i)*1.5), yy, PAL.t, 0.35); }
+  octx.putImageData(img,0,0);
+  ctx.clearRect(0,0,cv.width,cv.height); ctx.drawImage(off,0,0,cv.width,cv.height);
+}
+
+/* ============ odometer & era ============ */
+const odo=$("odo"); const strips=[];
+for(let k=0;k<4;k++){ const d=document.createElement("span"); d.className="dg"; const s=document.createElement("span"); s.className="strip"; s.innerHTML="01234567890".split("").map(c=>`<span>${c}</span>`).join(""); d.appendChild(s); odo.appendChild(d); strips.push(s); }
+let lastEraName="";
+function paintYear(v){
+  v=Math.max(BASE-SPAN-60, Math.min(BASE, v));
+  for(let k=0;k<4;k++){
+    const p10=Math.pow(10,k); let pos;
+    if(k===0) pos=v%10;
+    else { const r=v%p10; const base=Math.floor(v/p10)%10; const g=r>p10-1?r-(p10-1):0; pos=base+g; }
+    strips[3-k].style.transform=`translateY(${-pos}em)`;
+  }
+  const y=Math.round(v); const e=eraOf(y);
+  if(e[1]!==lastEraName){ lastEraName=e[1]; $("era").textContent=e[1]; document.documentElement.style.setProperty("--bg-tint", mixHex("#0f0d0b", e[2], 0.28)); }
+  odo.setAttribute("aria-label", `Year ${y}`);
+}
+function mixHex(a,b,t){const A=parseInt(a.slice(1),16),B=parseInt(b.slice(1),16);const f=s=>Math.round(((A>>s)&255)*(1-t)+((B>>s)&255)*t);return "#"+[f(16),f(8),f(0)].map(v=>v.toString(16).padStart(2,"0")).join("");}
+function shakeScene(big){ if(REDUCE) return; const s=$("scene"); s.classList.remove("shake","big"); void s.offsetWidth; s.classList.add("shake"); if(big) s.classList.add("big"); }
+
+/* ============ suggestions ============ */
+function suggest(P, text){
+  const n=norm(text); if(n.length<3) return [];
+  const out=[];
+  for(const e of P.entries){
+    let best=Infinity;
+    for(const k of e.keys){
+      if(k===n) best=Math.min(best,0);
+      else if(k.startsWith(n)) best=Math.min(best,1+k.length/200);
+      else if(k.split(" ").some(w=>w.startsWith(n))) best=Math.min(best,2+k.length/200);
+      else if(n.length>=5 && Math.abs(k.length-n.length)<=2 && digits(k)===digits(n)){ const d=lev(n,k); if(d<=2) best=Math.min(best,3+d); }
+    }
+    if(best<Infinity) out.push({e,best});
+  }
+  return out.sort((a,b)=>a.best-b.best).slice(0,4).map(o=>o.e);
+}
+function attachSuggest(inp, P, pick){
+  const box=$("sugg"); let list=[], sel=-1;
+  const draw=()=>{
+    if(!list.length){ box.hidden=true; box.innerHTML=""; return; }
+    box.hidden=false;
+    box.innerHTML=list.map((e,i)=>`<button type="button" role="option" aria-selected="${i===sel}" data-i="${i}"><span>${esc(e.name)}</span>${i===sel?'<span class="hint">↵ dig</span>':""}</button>`).join("");
+    [...box.children].forEach(b=>{ b.onpointerdown=ev=>{ ev.preventDefault(); pick(list[+b.dataset.i]); }; });
+  };
+  inp.addEventListener("input",()=>{ list=suggest(P, inp.value); sel=list.length?0:-1; draw(); });
+  inp.addEventListener("keydown",ev=>{
+    if(box.hidden) return;
+    if(ev.key==="ArrowDown"){ ev.preventDefault(); sel=(sel+1)%list.length; draw(); }
+    else if(ev.key==="ArrowUp"){ ev.preventDefault(); sel=(sel-1+list.length)%list.length; draw(); }
+    else if(ev.key==="Escape"){ ev.preventDefault(); list=[]; sel=-1; draw(); }
+    else if(ev.key==="Tab"&&sel>=0){ ev.preventDefault(); inp.value=list[sel].name; }
+  });
+  return { current:()=> (!box.hidden&&sel>=0)?list[sel]:null, clear:()=>{ list=[]; sel=-1; draw(); } };
+}
+
+/* ============ game ============ */
+const LEN=7, SECS=25, PENALTY=3;
+let mode="daily", view="", roundEnd=0, wrongs=0, G=null, sg=null;
+function hud(l,r){ if(l!==undefined) $("hud-l").textContent=l; if(r!==undefined) $("hud-r").textContent=r; }
+function stage(html){ $("stage").innerHTML=`<div class="panel">${html}</div>`; }
+function fmtDate(key){const [y,m,d]=key.split("-").map(Number);return new Date(y,m-1,d).toLocaleDateString(undefined,{month:"short",day:"numeric"});}
+function legendHTML(){ return [1,2,3,4,5,6].map(t=>`<div><dt><img src="${spriteURL("t"+t,3)}" alt="">${TIERS[t].name}</dt><dd class="ex">${TIERS[t].desc}</dd><dd class="yrs">${TIERS[t].pts} yrs</dd></div>`).join(""); }
+$("help-legend").innerHTML=legendHTML();
+const wiki = name => `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(name)}&go=Go`;
+const wlink = name => `<a class="wiki" href="${wiki(name)}" target="_blank" rel="noopener">${esc(name)}<span class="ext" aria-hidden="true">↗</span></a>`;
+const allIdx = () => PROMPTS.map((_,i)=>i);
+
+function newUnlimited(){
+  const last=store.get("footnote:unl-last")||[];
+  let pool=allIdx().filter(i=>!last.includes(i)); if(pool.length<LEN) pool=allIdx();
+  const order=shuffle(pool).slice(0,LEN); store.set("footnote:unl-last",order);
+  return {key:"unl-"+Date.now(), order, res:[], done:false, kind:"unl"};
+}
+function loadRun(){
+  if(mode==="daily"){ const key=todayKey(); let s=store.get("footnote:d:"+key);
+    if(!s) s={key, order:shuffle(allIdx(), rng(hash("footnote"+key))).slice(0,LEN), res:[], done:false, kind:"daily"}; G=s; }
+  else { let s=store.get("footnote:unl"); if(!s||s.done||!s.order) s=newUnlimited(); G=s; }
+}
+const saveRun=()=>store.set(G.kind==="daily"?"footnote:d:"+G.key:"footnote:unl", G);
+const title=()=>G.kind==="daily"?`Daily dig № ${digNumber(G.key)}`:"Unlimited dig";
+
+function home(){
+  view="home"; loadRun(); if(G.done) return results();
+  setScore(sum(G.res), true); hud(title(), G.res.length?`Prompt ${G.res.length+1} of ${LEN}`:"");
+  const daily=G.kind==="daily", best=store.get("footnote:best")||0;
+  stage(`<div class="card">
+      <div class="eyebrow">${daily?`${title()} · ${esc(fmtDate(G.key))}`:"Unlimited · a fresh set of seven"}</div>
+      <h2 class="q">${daily?"Obvious answers barely move you. Rare ones send the lantern back through the centuries.":"Same dig, no daily limit. Seven new prompts every run."}</h2>
+      <p class="lede">Seven prompts, 25 seconds each. Suggestions appear as you type; Enter digs the highlighted one. Every point is a year further into the past.</p>
+      <button class="btn wide" id="go">${G.res.length?`Resume at prompt ${G.res.length+1}`:daily?"Begin dig":"Begin a new dig"}</button>
+      ${!daily&&best?`<p class="small">Deepest unlimited run: ${best} years back, to ${BASE-best}.</p>`:""}
+    </div>
+    <dl class="legend">${legendHTML()}</dl>`);
+  $("go").onclick=play;
+}
+function progressHTML(res,cur){
+  return `<div class="progress" aria-hidden="true">${Array.from({length:LEN},(_,i)=> i<res.length?`<i style="background:var(${TIERS[res[i].tier].c})"></i>`:`<i class="${i===cur?"cur":""}"></i>`).join("")}</div>`;
+}
+function play(){
+  view="play"; const i=G.res.length, P=PROMPTS[G.order[i]];
+  roundEnd=performance.now()+SECS*1000; wrongs=0;
+  hud(undefined, `Prompt ${i+1} of ${LEN}`);
+  stage(`
+    <div class="row spread"><div class="eyebrow">Prompt ${i+1} of ${LEN}</div>${progressHTML(G.res,i)}</div>
+    <h2 class="q">${esc(P.q)}</h2>
+    <div class="timer" id="timer"><div class="cells" id="cells">${"<i></i>".repeat(25)}</div><span class="secs" id="secs">25</span></div>
+    <form class="answer" id="form" autocomplete="off">
+      <div class="sugg" id="sugg" hidden role="listbox" aria-label="Suggested answers"></div>
+      <div class="in"><input id="ans" type="text" placeholder="Type an answer" aria-label="Your answer" autocapitalize="words" spellcheck="false" enterkeyhint="send" autocomplete="off"><button class="btn" type="submit">Dig</button></div>
+    </form>
+    <p class="flash" id="flash">↑↓ choose · ↵ dig · esc to type freely · wrong answers cost ${PENALTY}s</p>`);
+  const inp=$("ans"); inp.focus();
+  sg=attachSuggest(inp, P, e=>commit(e, e.name));
+  $("form").onsubmit=e=>{ e.preventDefault(); if(view!=="play") return;
+    const s=sg.current(); if(s) return commit(s, s.name);
+    const v=inp.value; if(!v.trim()){ jolt(inp); return; }
+    const m=match(v,P); if(m) commit(m,v); else wrongAnswer(inp); };
+}
+function jolt(el){ el.classList.remove("jolt"); void el.offsetWidth; el.classList.add("jolt"); }
+function wrongAnswer(inp){
+  wrongs++; roundEnd-=PENALTY*1000;
+  const f=$("flash"); f.textContent=`Not in the record · −${PENALTY}s`; f.classList.add("bad");
+  const tm=$("timer"); if(tm){ tm.classList.remove("hit"); void tm.offsetWidth; tm.classList.add("hit"); }
+  const chip=document.createElement("span"); chip.className="float"; chip.textContent=`−${PENALTY}s`; $("form").appendChild(chip); setTimeout(()=>chip.remove(),900);
+  jolt(inp); inp.select();
+}
+function commit(e, input, timedOut){
+  if(view!=="play") return; view="reveal";
+  const pi=G.order[G.res.length], P=PROMPTS[pi];
+  const before=BASE-sum(G.res);
+  const r={p:pi, input:timedOut?"":String(input).trim(), name:e?e.name:null, tier:e?e.tier:0, pts:e?TIERS[e.tier].pts:0, timeout:!!timedOut, tries:wrongs+1};
+  G.res.push(r); if(G.res.length>=LEN) G.done=true; saveRun();
+  const after=BASE-sum(G.res);
+  setScore(sum(G.res));
+  if(r.pts>0){ burst(8+Math.round(r.pts/6), lx, ly+4); shakeScene(r.tier>=5); }
+  showReveal(r,P, eraOf(before)[1]!==eraOf(after)[1]?eraOf(after)[1]:null);
+}
+function showReveal(r,P,crossed){
+  const T=TIERS[r.tier]; const hidden=P.entries.find(e=>e.tier===6);
+  const deeper=shuffle(P.entries.filter(e=>e.tier===5&&e.name!==r.name)).slice(0,3).map(e=>e.name);
+  const last=G.done;
+  stage(`
+    <div class="eyebrow">${esc(P.q)}</div>
+    <div class="badge"><img src="${spriteURL("t"+r.tier,8)}" alt=""><div><div class="tiername" style="color:var(${T.c})">${esc(T.name)}</div><div class="tierpts">+${r.pts} yrs${r.tries>1&&!r.timeout?` · ${r.tries} tries`:""}</div></div></div>
+    <dl class="kv">
+      <div><dt>You said</dt><dd class="big">${r.input?esc(r.input):"<span class='small'>Nothing landed in time</span>"}${r.name&&norm(r.name)!==norm(r.input)?` <span class="small">→ ${esc(r.name)}</span>`:""}${r.name?` <span class="small">${wlink(r.name).replace(esc(r.name),"read")}</span>`:""}</dd></div>
+      <div><dt>Lost to History</dt><dd class="big gem">${r.tier===6?"You found it. Almost nobody gives this one.":wlink(hidden.name)}</dd></div>
+      ${deeper.length?`<div><dt>Footnotes</dt><dd>${deeper.map(wlink).join(" · ")}</dd></div>`:""}
+      ${r.tier===2?`<div><dt>Why Pub Quiz</dt><dd class="small">It feels obscure, but it's the "obscure" pick everyone reaches for.</dd></div>`:""}
+    </dl>
+    ${crossed?`<p class="crossing">You've dug into ${esc(crossed)}.</p>`:""}
+    <button class="btn wide" id="next">${last?"See where you landed":"Next prompt"}</button>`);
+  const nb=$("next"); nb.focus(); nb.onclick=last?results:play;
+}
+function shareText(){
+  const total=sum(G.res), y=BASE-total;
+  return `${G.kind==="daily"?`Footnote № ${digNumber(G.key)}`:"Footnote Unlimited"}\nReached ${y} · ${eraOf(y)[1]}\n${G.res.map(r=>TIERS[r.tier].sq).join("")} ${total} yrs back`;
+}
+function updateStreak(){
+  const s=store.get("footnote:streak")||{last:null,count:0};
+  if(s.last===G.key) return s;
+  const yd=new Date(); yd.setDate(yd.getDate()-1);
+  s.count = s.last===todayKey(yd) ? s.count+1 : 1; s.last=G.key; store.set("footnote:streak",s); return s;
+}
+function results(){
+  view="results"; const total=sum(G.res), y=BASE-total; setScore(total);
+  const daily=G.kind==="daily"; const found=G.res.filter(r=>r.tier===6).length;
+  let third;
+  if(daily){ const st=updateStreak(); third=`<div><b>${st.count}</b><span>day streak</span></div>`; }
+  else { const best=Math.max(store.get("footnote:best")||0,total); store.set("footnote:best",best); third=`<div><b>${best}</b><span>best run</span></div>`; }
+  hud(title(), "Complete");
+  stage(`<div class="card">
+      <div class="stat"><div><b>${total}</b><span>years back</span></div><div><b>${y}</b><span>reached</span></div>${third}</div>
+      <ol class="ledger">${G.res.map(r=>`<li><span class="pq">${esc(PROMPTS[r.p].q)}</span><span class="pa">${r.name?wlink(r.name):(r.input?esc(r.input):"—")}</span><span class="chip" style="color:var(${TIERS[r.tier].c})">${TIERS[r.tier].name} · ${r.pts}</span></li>`).join("")}</ol>
+      ${found?`<p class="crossing">${found===1?"One answer":found+" answers"} lost to history, recovered by you.</p>`:""}
+      <div class="row"><button class="btn flex1" id="share">Copy result</button><button class="btn ghost flex1" id="again">${daily?"Play Unlimited":"New set of seven"}</button></div>
+      <div id="sharebox"></div>
+      ${daily?`<p class="small">Next daily dig in <span id="cd" style="font-family:var(--pixel);color:var(--paper)"></span></p>`:""}
+    </div>`);
+  tickCountdown();
+  $("again").onclick=()=>{ if(daily) switchMode("unl"); else { G=newUnlimited(); saveRun(); home(); } };
+  $("share").onclick=()=>{ const txt=shareText(); const fb=()=>{ $("sharebox").innerHTML=`<textarea class="share" id="sharetxt" readonly aria-label="Result text">${esc(txt)}</textarea>`; const t=$("sharetxt"); t.focus(); t.select(); };
+    try{ navigator.clipboard.writeText(txt).then(()=>{$("share").textContent="Copied";},fb); }catch(e){ fb(); } };
+}
+function tickCountdown(){
+  const el=$("cd"); if(!el) return; const now=new Date(), mid=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1);
+  const s=Math.max(0,Math.floor((mid-now)/1000)); el.textContent=`${pad(Math.floor(s/3600))}:${pad(Math.floor(s%3600/60))}:${pad(s%60)}`;
+  if(s===0&&mode==="daily"&&view==="results") home();
+}
+setInterval(tickCountdown,1000);
+
+/* ============ loop ============ */
+function loop(now){
+  render(now); paintYear(yearShown);
+  if(view==="play"){
+    const rem=Math.max(0,(roundEnd-now)/1000); const cells=$("cells");
+    if(cells){ const on=Math.ceil(rem); [...cells.children].forEach((c,i)=>c.classList.toggle("off", i>=on)); $("secs").textContent=Math.ceil(rem); $("timer").classList.toggle("low", rem<6); }
+    if(rem<=0) commit(null,"",true);
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* ============ nav ============ */
+function switchMode(m){ mode=m; $("nav-daily").setAttribute("aria-pressed",m==="daily"); $("nav-unl").setAttribute("aria-pressed",m==="unl"); home(); }
+$("nav-daily").onclick=()=>{ if(mode!=="daily"||view==="results") switchMode("daily"); };
+$("nav-unl").onclick=()=>{ if(mode!=="unl"||view==="results") switchMode("unl"); };
+const fsb=$("nav-fs");
+if(!document.documentElement.requestFullscreen) fsb.hidden=true;
+fsb.onclick=()=>{ if(document.fullscreenElement){ document.exitFullscreen?.(); } else { document.documentElement.requestFullscreen().catch(()=>{}); } };
+document.addEventListener("fullscreenchange",()=>{ fsb.textContent=document.fullscreenElement?"Exit full screen":"Full screen"; });
+const help=$("help"); const closeHelp=()=>{ help.hidden=true; store.set("footnote:seen",1); };
+$("nav-help").onclick=()=>{ help.hidden=false; $("help-close").focus(); };
+$("help-close").onclick=closeHelp; help.addEventListener("click",e=>{ if(e.target===help) closeHelp(); });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&!help.hidden) closeHelp(); });
+
+function start(data){ switchMode(data.mode==="unl"?"unl":"daily"); if(!store.get("footnote:seen")) help.hidden=false; }
+window.claude?.hot?.snapshot?.(()=>({mode}));
+window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+</script>
+
+</body>
+</html>
